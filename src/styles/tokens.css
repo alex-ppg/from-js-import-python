@@ -1,0 +1,177 @@
+/* Design tokens. Syntax colours follow GitHub's Primer palette so CodeMirror
+   (live editors) matches Shiki's github-*-default themes (static code). */
+
+:root {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, 'Cascadia Code', Menlo, Consolas, monospace;
+  --code-size: 13.5px;
+
+  --topbar-h: 56px;
+  --sidebar-w: 292px;
+  --toc-w: 228px;
+  --prose-w: 46rem;
+  --wide-w: 72rem;
+
+  --radius: 12px;
+  --radius-sm: 9px;
+
+  --js: #f7df1e;
+  --py-blue: #3776ab;
+  --py-yellow: #ffd43b;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root,
+:root[data-theme='light'] {
+  --bg: #fbfaf8;
+  --bg-elev: #ffffff;
+  --bg-sunken: #f2f1ed;
+  --bg-hover: #eeece7;
+  --text: #1c1e21;
+  --text-muted: #565f69;
+  --text-faint: #858d96;
+  --border: #e5e2db;
+  --border-strong: #d2cec5;
+
+  --accent: #2c6ca4;
+  --accent-strong: #235889;
+  --accent-soft: #e7f0f9;
+  --accent-ink: #ffffff;
+  --link: #2563a3;
+  --focus: #2c6ca4;
+
+  --js-panel: #fdf7cf;
+  --js-ink: #6b5900;
+  --py-panel: #e6eff8;
+  --py-ink: #235889;
+
+  --code-bg: #f6f8fa;
+  --code-border: #e1e4e8;
+  --code-text: #1f2328;
+  --console-bg: #eef1f4;
+  --inline-code-bg: rgba(175, 184, 193, 0.22);
+
+  --tok-keyword: #cf222e;
+  --tok-string: #0a3069;
+  --tok-comment: #6e7781;
+  --tok-constant: #0550ae;
+  --tok-function: #8250df;
+  --tok-type: #953800;
+  --tok-property: #0550ae;
+  --tok-invalid: #82071e;
+
+  --caret: #1f2328;
+  --selection: rgba(84, 174, 255, 0.3);
+  --active-line: rgba(208, 215, 222, 0.32);
+  --bracket-match: rgba(84, 174, 255, 0.28);
+  --err-line: rgba(255, 129, 130, 0.2);
+
+  --ok: #1a7f37;
+  --ok-soft: #e3f6e8;
+  --ok-border: #a8dfb6;
+  --err: #c9252d;
+  --err-soft: #fdecea;
+  --err-border: #f5c2c0;
+  --warn: #8a5d00;
+  --warn-soft: #fdf5d3;
+  --warn-border: #ecd88c;
+  --purple: #7c4dd6;
+
+  --gotcha: #c9252d;
+  --gotcha-soft: #fff4f3;
+  --pythonic: #2c6ca4;
+  --pythonic-soft: #f0f6fc;
+  --tip: #1a7f37;
+  --tip-soft: #f0f9f2;
+  --note: #565f69;
+  --note-soft: #f5f4f1;
+  --deep: #7c4dd6;
+  --deep-soft: #f8f4ff;
+
+  --shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.06);
+  --shadow: 0 1px 2px rgba(31, 35, 40, 0.05), 0 6px 20px rgba(31, 35, 40, 0.06);
+  --shadow-lg: 0 18px 56px rgba(31, 35, 40, 0.22);
+  --on-ok: #ffffff;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0d1117;
+  --bg-elev: #141a22;
+  --bg-sunken: #0a0d12;
+  --bg-hover: #1b222c;
+  --text: #e6edf3;
+  --text-muted: #9aa2ad;
+  --text-faint: #6e7781;
+  --border: #252c36;
+  --border-strong: #353d48;
+
+  --accent: #5ea2df;
+  --accent-strong: #7ab5ea;
+  --accent-soft: rgba(94, 162, 223, 0.14);
+  --accent-ink: #0b1220;
+  --link: #6db0ee;
+  --focus: #6db0ee;
+
+  --js-panel: rgba(247, 223, 30, 0.09);
+  --js-ink: #e6d24c;
+  --py-panel: rgba(94, 162, 223, 0.12);
+  --py-ink: #7ab5ea;
+
+  --code-bg: #11161d;
+  --code-border: #252c36;
+  --code-text: #e6edf3;
+  --console-bg: #0b0f14;
+  --inline-code-bg: rgba(110, 118, 129, 0.28);
+
+  --tok-keyword: #ff7b72;
+  --tok-string: #a5d6ff;
+  --tok-comment: #8b949e;
+  --tok-constant: #79c0ff;
+  --tok-function: #d2a8ff;
+  --tok-type: #ffa657;
+  --tok-property: #79c0ff;
+  --tok-invalid: #ffa198;
+
+  --caret: #e6edf3;
+  --selection: rgba(56, 139, 253, 0.38);
+  --active-line: rgba(110, 118, 129, 0.13);
+  --bracket-match: rgba(56, 139, 253, 0.32);
+  --err-line: rgba(248, 81, 73, 0.18);
+
+  --ok: #3fb950;
+  --ok-soft: rgba(46, 160, 67, 0.15);
+  --ok-border: rgba(46, 160, 67, 0.42);
+  --err: #f85149;
+  --err-soft: rgba(248, 81, 73, 0.12);
+  --err-border: rgba(248, 81, 73, 0.4);
+  --warn: #d6a43a;
+  --warn-soft: rgba(187, 128, 9, 0.15);
+  --warn-border: rgba(187, 128, 9, 0.42);
+  --purple: #bc8cff;
+
+  --gotcha: #ff7b72;
+  --gotcha-soft: rgba(248, 81, 73, 0.07);
+  --pythonic: #7ab5ea;
+  --pythonic-soft: rgba(94, 162, 223, 0.08);
+  --tip: #56d364;
+  --tip-soft: rgba(46, 160, 67, 0.08);
+  --note: #9aa2ad;
+  --note-soft: rgba(110, 118, 129, 0.1);
+  --deep: #bc8cff;
+  --deep-soft: rgba(163, 113, 247, 0.08);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.6);
+  --on-ok: #0d1117;
+}
+
+/* Shiki dual themes (rendered with defaultColor: false). */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+}
+:root[data-theme='dark'] .shiki,
+:root[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark);
+}

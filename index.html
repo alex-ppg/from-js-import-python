@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>from js import python: Python for JavaScript developers</title>
+    <meta
+      name="description"
+      content="Learn Python through the lens of JavaScript: side-by-side idiom mappings, Pythonic upgrades, and interactive coding challenges running real Python 3.14 in your browser."
+    />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <script>
+      // Apply the theme before first paint (see src/lib/theme.ts).
+      (function () {
+        var theme = 'light';
+        try {
+          var stored = localStorage.getItem('fjip:theme');
+          theme = stored === 'light' || stored === 'dark' ? stored : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } catch (e) {}
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>This site runs Python in your browser, so it needs JavaScript. Ironic, we know.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
