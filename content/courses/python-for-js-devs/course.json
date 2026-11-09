@@ -1,0 +1,8 @@
+{
+  "title": "Python for JavaScript Developers",
+  "summary": "The core course. Map everything you know from JavaScript onto idiomatic Python, from syntax and collections to classes, async and type hints.",
+  "level": "Start here",
+  "icon": "book",
+  "order": 1,
+  "parts": ["Foundations", "Collections", "Functions & Iteration", "Objects & Classes", "Robust Code", "Advanced Python"]
+}

@@ -19,10 +19,20 @@ export interface QuizProgress {
   correct: boolean;
 }
 
+/** Leitner-box state for a reference flashcard (box 1 = new or missed, 5 = mastered). */
+export interface CardProgress {
+  box: number;
+  seen: number;
+  last: number;
+}
+
+export const MAX_BOX = 5;
+
 interface Data {
   lessons: Record<string, LessonProgress>;
   challenges: Record<string, ChallengeProgress>;
   quizzes: Record<string, QuizProgress>;
+  cards: Record<string, CardProgress>;
 }
 
 const KEY = 'fjip:progress:v1';
@@ -33,6 +43,7 @@ function load(): Data {
     lessons: stored.lessons ?? {},
     challenges: stored.challenges ?? {},
     quizzes: stored.quizzes ?? {},
+    cards: stored.cards ?? {},
   };
 }
 
@@ -100,8 +111,22 @@ class ProgressStore {
     this.commit();
   }
 
+  card(id: string): CardProgress | undefined {
+    return this.data.cards[id];
+  }
+
+  /** Leitner step: a known card moves up a box, a missed one goes back to box 1. */
+  gradeCard(id: string, knewIt: boolean): void {
+    const card = this.data.cards[id] ?? { box: 1, seen: 0, last: 0 };
+    card.box = knewIt ? Math.min(MAX_BOX, card.box + 1) : 1;
+    card.seen++;
+    card.last = Date.now();
+    this.data.cards[id] = card;
+    this.commit();
+  }
+
   reset(): void {
-    this.data = { lessons: {}, challenges: {}, quizzes: {} };
+    this.data = { lessons: {}, challenges: {}, quizzes: {}, cards: {} };
     this.commit();
     this.flush();
   }

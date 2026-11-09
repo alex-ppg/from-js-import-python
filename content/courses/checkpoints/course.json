@@ -1,0 +1,8 @@
+{
+  "title": "Checkpoints",
+  "summary": "One exam per part of the core course. Mixed quizzes and integrative challenges that prove each part has stuck.",
+  "level": "Test yourself",
+  "icon": "check",
+  "order": 7,
+  "parts": ["Core Course Exams"]
+}

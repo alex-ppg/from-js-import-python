@@ -1,0 +1,8 @@
+{
+  "title": "Algorithms & Interview Prep",
+  "summary": "Classic data-structure and algorithm patterns in idiomatic Python: two pointers, hashing, heaps, trees, graphs, backtracking and dynamic programming, all challenge-driven.",
+  "level": "Practice",
+  "icon": "target",
+  "order": 4,
+  "parts": ["Toolkit", "Patterns", "Structures", "Techniques"]
+}

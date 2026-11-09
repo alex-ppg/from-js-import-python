@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "validate": "node --disable-warning=ExperimentalWarning scripts/validate.ts",
-    "check": "npm run typecheck && npm run validate"
+    "test": "node --disable-warning=ExperimentalWarning --test \"tests/*.test.ts\"",
+    "check": "npm run typecheck && npm test && npm run validate"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",

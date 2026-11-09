@@ -1,15 +1,16 @@
 # Authoring guide
 
-Everything a contributor (human or AI) needs to write lessons for **from js import python**. Read it fully before writing, then read [`content/lessons/07-lists.md`](content/lessons/07-lists.md), the reference lesson for tone, density and structure.
+Everything a contributor (human or AI) needs to write lessons for **from js import python**. Read it fully before writing, then read [`content/courses/python-for-js-devs/07-lists.md`](content/courses/python-for-js-devs/07-lists.md), the reference lesson for tone, density and structure.
 
 - [The audience](#the-audience)
 - [Files and frontmatter](#files-and-frontmatter)
 - [Markdown building blocks](#markdown-building-blocks)
 - [Challenges and the test API](#challenges-and-the-test-api)
 - [The Python sandbox](#the-python-sandbox)
+- [Course formats](#course-formats)
 - [Style guide](#style-guide)
 - [Validating your work](#validating-your-work)
-- [Curriculum map](#curriculum-map)
+- [Curriculum maps](#curriculum-maps)
 
 ## The audience
 
@@ -21,7 +22,7 @@ Readers are **senior JavaScript/TypeScript engineers**. They know what a closure
 
 ## Files and frontmatter
 
-Lessons live in `content/lessons/NN-slug.md`. The number orders the curriculum and the slug becomes the URL (`#/learn/slug`).
+The site hosts several **courses**. Each one is a folder, `content/courses/<course-id>/`, holding a `course.json` (title, summary, level, icon, order and the ordered list of **parts**) and its lessons, `NN-slug.md`. The number orders lessons within the course. The slug becomes the URL (`#/learn/slug`) and must be **unique across all courses**.
 
 ```yaml
 ---
@@ -32,8 +33,9 @@ minutes: 30
 ---
 ```
 
-- `part` must be one of: `Foundations`, `Collections`, `Functions & Iteration`, `Objects & Classes`, `Robust Code`, `Advanced Python`.
+- `part` must be one of the parts listed in **that course's** `course.json`.
 - `minutes` is the estimated reading and practice time (a whole number).
+- Don't edit `course.json` unless you own the course.
 
 ## Markdown building blocks
 
@@ -209,8 +211,21 @@ Code runs in **Pyodide 314 (CPython 3.14)** inside a Web Worker. The same harnes
 - `time.sleep` works but blocks, so keep sleeps short (≤ 0.2 s total per snippet).
 - There's an **in-memory filesystem**. `open("notes.txt", "w")` works, but files don't persist across page reloads. Create the files you need inside the same snippet.
 - **Not available:** `input()` (raises), threads and processes (`threading.Thread.start()` raises `RuntimeError`), network access, and `zoneinfo` time zones (they need the `tzdata` package). Show those as static `python` code.
-- **Stdlib only** in runnable code. Pyodide can load NumPy and friends on demand, but the validator runs offline. Show third-party code as static fences.
-- Runs time out after 10 seconds.
+- **Stdlib only** in runnable code. Pyodide can load NumPy and friends on demand, but the validator runs offline. Show third-party code as static fences. `sqlite3`, `csv`, `json`, `tomllib`, `logging`, `unittest`, `doctest`, `unittest.mock`, `argparse`, `asyncio`, `contextvars`, `ast`, `inspect`, `dis`, `gc` and `weakref` all work.
+- Runs time out after 10 seconds. Pyodide is about 2 to 3 times slower than native CPython: size large-input tests so an efficient solution finishes in well under a second.
+- **Keep recursion shallow (under about 500 frames).** Plain Python recursion past the limit (1000) raises `RecursionError` as usual. But recursion through C code, such as a `@functools.cache`-decorated function about 900 deep, or building and freeing very deeply nested structures, overflows the browser's WebAssembly stack and **kills the interpreter**. The site restarts Python and reports it, but don't design snippets or tests that go there. Use bottom-up/iterative solutions for big inputs.
+- **The interpreter is reused across runs on a page.** `__main__` is fresh every run, but `sys.modules` persists. Demos that write and import their own module files should call `sys.modules.pop("name", None)` first.
+- **asyncio runs on the browser's event loop.** It mostly behaves like CPython, but eager task factories aren't supported, and tasks still pending when `main()` returns are **not** cancelled. Await everything you start, keep total sleeps small, and show the rare CPython-only behaviour as static code. A coroutine that awaits forever can't be interrupted (the 10 s timeout still kills the run), so guard async tests with `asyncio.timeout(...)`.
+
+## Course formats
+
+The core course, **Python in Practice** and **Advanced Python** use the standard lesson shape described in this guide. The other courses reuse the same building blocks in a different proportion:
+
+- **Algorithms & Interview Prep.** Per pattern: one short explanation including the time and space complexity, the JS habit it replaces where relevant, and a `python run` playground. Add a few quizzes, mostly about complexity and behaviour, and finish with **5 challenges** (4 in the toolkit lesson) from easy to hard. Tests cover edge cases thoroughly: empty input, one element, duplicates, negatives, ties. Where efficiency is the point, include **one large-input test**, sized so an efficient solution takes well under a second in the validator and a quadratic one would blow the 10 s timeout. Respect the recursion note in [The Python sandbox](#the-python-sandbox): iterative DFS, bottom-up DP for large inputs.
+- **JS → Python Drills.** Minimal prose: an intro paragraph and optionally a small table of the mappings the set uses. Then **8 to 10 challenges**, roughly 4 easy, 3 medium and 2 hard. Each one has a `js` fence holding the code to translate, a description stating the Python function name and signature, tests that pin down behaviour (including the edge cases where JS and Python differ), and, where it matters, one idiom check. Playgrounds and quizzes are optional (0 to 2). Challenge ids start with `drill-`.
+  - In **Make It Pythonic**, the starter is working but JS-flavoured Python. It passes the behaviour tests and fails only the idiom checks. That's intended (the validator only warns when a starter passes *every* test).
+- **Guided Projects.** Open with "What you'll build" (with a sample of the finished thing working) and "How the pieces fit", then **5 or 6 steps**. Each step is a `## Step N: ...` section with a short design explanation, then one challenge with id `<project>-step-N`. **Every step's starter contains the complete reference solution of all previous steps, plus the stub for the new piece**, so each step stands alone even if the learner skipped the last one. Step tests focus on the new piece, and a final integration step exercises everything together. Keep each step's new code to roughly 10 to 40 lines.
+- **Checkpoints.** One exam per part of the core course. A one-paragraph intro links every lesson covered, then sections by topic hold **16 to 20 quizzes** in total (mostly `:::quiz output`, so they're proven correct), then `## Final challenges` with **4 or 5 integrative challenges** that combine several of the part's topics. Don't teach new material; each section can end with a one-line pointer back to the owning lesson.
 
 ## Style guide
 
@@ -296,16 +311,23 @@ Prefer the comprehension. `map()` returns a lazy iterator. See [Comprehensions](
 ## Validating your work
 
 ```bash
-npm run validate -- 07-lists      # just your lesson (any filename substring)
-npm run validate                  # everything
-npm run validate -- --no-run      # structure and link checks only
+npm run validate -- 07-lists          # just your lesson (any path substring: file name or slug)
+npm run validate -- algorithms        # a whole course
+npm run validate                      # everything
+npm run validate -- --no-run          # structure and link checks only
 ```
 
-The validator parses every lesson, checks frontmatter, unique ids and `lesson:` links, **executes** every playground, output quiz and challenge (solution and starter) with the real Pyodide runtime, and parses every other Python fence. A lesson is done when it has **0 errors**. A warning for links to lessons that don't exist *yet* is fine. Then preview it with `npm run dev`.
+Filters match the lesson's path, `content/courses/<course>/NN-slug.md`. Lesson numbers repeat across courses, so filter by **slug**, not by number.
 
-## Curriculum map
+The validator parses every lesson and checks frontmatter (including that the part belongs to the course), ids unique across all courses, and `lesson:` links. It **executes** every playground, output quiz and challenge (solution and starter) with the real Pyodide runtime, and parses every other Python fence. A lesson is done when it has **0 errors**. A warning for links to lessons that don't exist *yet* is fine.
 
-Use these slugs for `lesson:` links. The bullets are each lesson's scope. Stay inside your scope and link to the lesson that owns a topic instead of teaching it twice.
+## Curriculum maps
+
+Use these slugs for `lesson:` links. Slugs are global, so `lesson:dicts` works from any course. The bullets are each lesson's scope. Stay inside your scope and link to the lesson that owns a topic instead of teaching it twice. Later courses build on the core course: link back to it rather than re-teaching basics.
+
+## Course: Python for JavaScript Developers (`python-for-js-devs`)
+
+The core course: 25 lessons, all written. Its six parts follow.
 
 ### Foundations
 
@@ -368,3 +390,129 @@ Use these slugs for `lesson:` links. The bullets are each lesson's scope. Stay i
 **24 `standard-library`: Batteries Included.** An npm → stdlib mapping table (lodash → itertools/functools/collections/operator; date-fns/dayjs → datetime (+ zoneinfo); uuid → uuid; crypto → hashlib/secrets/hmac; path/fs → pathlib/shutil; process.argv/commander → sys.argv/argparse; child_process → subprocess; querystring/URL → urllib.parse; dotenv → os.environ; csv → csv; sqlite → sqlite3; base64; logging libs → logging; util.inspect → pprint; structuredClone → copy.deepcopy; perf_hooks → time.perf_counter). Runnable tours of `collections`, `datetime` (1-based months vs `Date`'s 0-based!, timedelta, ISO parsing, strftime, aware vs naive, `timezone.utc`), `pathlib`, `json`, `csv` with `io.StringIO`, `textwrap`, `pprint`, `heapq`, `bisect`, `statistics`, `random`/`secrets`, `uuid`, `hashlib`, `base64`, `urllib.parse`, `difflib`, `logging`. Notable third-party packages as static mentions (requests/httpx, pydantic, FastAPI, rich, typer, pytest, numpy/pandas).
 
 **25 `gotchas`: Gotchas: A Field Guide for JS Brains.** A rapid-fire, quiz-heavy recap of the traps, each with a one-paragraph explanation and a link to the owning lesson. Mutable defaults, late-binding closures, `[[0]*3]*3`, `++i`, `is` vs `==`, `sort()` returns `None`, `{}` is a dict, `(1)` isn't a tuple, falsy empty containers, truthy NaN, `0 or default`, `round(2.5)`, `-7 % 3`, `//` floors, strict `int()`, `"1" + 1`, iterator exhaustion, mutating while iterating, no block scope, `UnboundLocalError`, shadowing builtins (`list`, `id`, `type`, `sum`), `{1: "a", True: "b"}`, `a += [x]` vs `a = a + [x]` aliasing, the shared class attribute, forgetting `self`, a coroutine never awaited, `split()` vs `split(" ")`, `replace` replaces all. Challenges are "fix the JS-brained bug" exercises: the starter contains the bug and the tests prove the fix.
+
+## Course: Python in Practice (`python-in-practice`)
+
+Parts: `Files & Data`, `Tools & Automation`, `Quality & Testing`, `Services & Storage`. A standard lesson format, aimed at someone who has finished the core course. Show the JS/Node equivalent (`fs`, `path`, commander, winston, jest, fetch, better-sqlite3...) at the start of each section.
+
+**01 `files-and-paths` (Files & Data): Files & Paths.** `pathlib.Path` vs Node's `path`/`fs`: joining with `/`, `.name`/`.stem`/`.suffix`/`.parent`, `resolve`, `relative_to`, `with_suffix`. Reading and writing (`read_text`/`write_text`/`read_bytes`, `open()` modes, always `encoding="utf-8"`, newlines), lazy line iteration. `exists`/`is_file`/`mkdir(parents=True, exist_ok=True)`/`unlink`/`rename`/`replace`. `iterdir`/`glob`/`rglob` vs `readdir` and glob packages, `stat()`, `shutil` (copy, copytree, move, rmtree), `tempfile`, the atomic-write pattern, `os.walk`. Every demo creates its own files in the in-memory filesystem.
+
+**02 `text-processing` (Files & Data): Text Processing & Regular Expressions.** `re` in depth: compiled patterns, flags (including `VERBOSE` with comments), named groups `(?P<name>...)` vs JS `(?<name>...)` (check what 3.14 accepts), non-capturing groups, backreferences, lookarounds, greedy vs lazy, `finditer` with spans, `sub` with a function and `\g<name>`, `split` with capture groups, `fullmatch` for validation, `re.escape`. Mapping from JS RegExp flags and methods (`matchAll`, `replaceAll` with a callback, the sticky flag). Parsing structured text (log lines, `key=value`), `str.translate`, `textwrap`, `string.Template`, `difflib` (`get_close_matches`, `unified_diff`), Unicode normalisation and `casefold`.
+
+**03 `data-formats` (Files & Data): CSV, JSON & Config Files.** `csv` (reader/writer, `DictReader`/`DictWriter`, `newline=""`, dialects and delimiters, quoting) with `io.StringIO`. `json` in depth: `dumps` options, a custom `default=` for datetimes/dataclasses/sets, `object_hook`, `JSONDecodeError` positions, number-precision differences from JS. `tomllib` (3.11+, read-only) vs package.json-style config, `configparser`, environment-based config, `base64`/`binascii`, `struct` for binary records (≈ `DataView`).
+
+**04 `dates-and-times` (Files & Data): Dates, Times & Durations.** `datetime`/`date`/`time`/`timedelta` vs JS `Date`: months are 1–12, objects are immutable, and timestamps are float seconds rather than milliseconds. ISO 8601 (`fromisoformat`, which accepts `Z` since 3.11, and `isoformat`), a `strftime`/`strptime` code table, naive vs aware, `timezone.utc`, fixed offsets, `zoneinfo` and DST pitfalls (static), arithmetic (no built-in add-months: use `calendar.monthrange`), `calendar`, `time.perf_counter`/`monotonic`, and the Temporal API compared. **Tests and snippets must be deterministic**: never compare against `now()`, inject "today" instead.
+
+**05 `data-wrangling` (Files & Data): Data Wrangling with the Standard Library.** List-of-dicts pipelines, grouping and aggregation (`defaultdict`, `Counter`, `groupby` after sorting), multi-key sorting, `statistics` (mean, median, mode, stdev, quantiles), joining datasets through dict indexes, pivoting and reshaping (`zip(*rows)`, nested dicts), dedupe and missing values, top-N with `heapq`, rolling windows with `deque`, text reports with f-string alignment, `pprint`. When to reach for pandas/polars (static). Compared with lodash and Array-method pipelines.
+
+**06 `command-line-tools` (Tools & Automation): Command-Line Tools.** `sys.argv`. `argparse`: positionals and options, `type`, `default`, `choices`, `store_true`, `nargs`, mutually exclusive groups, subcommands, help text, and `parse_args(list)` for testing. Exit codes (`sys.exit`, `SystemExit`), stdin/stdout/stderr, `os.environ`, `shlex`, `subprocess.run` (static), entry points, click/typer (static). Compared with commander/yargs and `process.argv`.
+
+**07 `logging-and-debugging` (Tools & Automation): Logging & Debugging.** `logging`: `getLogger(__name__)`, levels, `basicConfig`, handlers/formatters (a `StreamHandler` to a `StringIO` for demos), `logger.exception`, lazy `%s` arguments, `extra`, `LoggerAdapter`, filters, propagation, `dictConfig`, JSON logging. Compared with console/winston/pino. Debugging: `breakpoint()`/pdb commands (static), the `traceback` module, `warnings` (filters, `DeprecationWarning` visibility), `pprint`, `f"{x=}"`, `sys.excepthook`, reading chained tracebacks.
+
+**08 `testing-with-python` (Quality & Testing): Testing: unittest, pytest & Mocks.** `unittest.TestCase` (assertions, `subTest`, setUp/tearDown), run inside the sandbox with `unittest.main(argv=[""], exit=False)` or a `TextTestRunner` writing to a `StringIO`. `doctest`. pytest style (plain `assert`, fixtures, `parametrize`, `tmp_path`, `monkeypatch`, `pytest.raises`) as static code, with a jest/vitest mapping table. `unittest.mock` (`Mock`, `MagicMock`, `patch`, `side_effect`, `assert_called_once_with`, `autospec`), test doubles for time and randomness, hypothesis and coverage (static). Challenge idea: the learner writes a `TestCase` that must pass against a correct implementation and fail against several buggy ones (mutation testing).
+
+**09 `code-quality` (Quality & Testing): Code Quality & Refactoring.** PEP 8 essentials, `import this`. ruff (lint and format; the F/E/B/I/UP/SIM rule families), type checking in CI, docstring conventions (PEP 257, Google style), naming. Refactoring moves: guard clauses and early returns, removing flag arguments, extracting functions, dataclasses instead of dict-records, no mutable defaults or globals, EAFP, small pure functions. pyproject/pre-commit config (static). Challenges are refactoring katas: behaviour tests plus AST checks such as maximum nesting depth, no `range(len(...))` and no `global`.
+
+**10 `performance-basics` (Quality & Testing): Performance: Measure, Then Speed Up.** `timeit`, `time.perf_counter`, `cProfile`/`pstats` (check they work in the sandbox). A big-O table of built-in operations (list `insert(0)`/`in`/`pop(0)`, dict/set, deque, string concatenation, sorting). Choosing structures (set membership, deque, heapq, bisect), generator vs list memory (`sys.getsizeof`), caching (mind the sandbox's recursion note), hoisting work out of loops, `"".join`, `__slots__`, and when to use numpy/PyPy/C extensions (static). Challenges: speed up slow functions, with a large-input test that times out on the quadratic version.
+
+**11 `http-and-apis` (Services & Storage): HTTP & JSON APIs.** There's no network in the sandbox, so demos use fake transports and canned responses. `urllib.parse` (`urlsplit`, `urlencode`, `quote`, `parse_qs`, `urljoin`), `http.HTTPStatus`, modelling requests and responses with dataclasses, `requests`/`httpx` usage (static: params, headers, json, timeouts, `raise_for_status`, sessions), async httpx (static). Retries with exponential backoff (inject `sleep`), pagination with generators, rate-limit and `Link` headers, an API client class built over an injectable transport, and serving APIs with FastAPI/Flask (static) vs Express. Compared with fetch/axios.
+
+**12 `sqlite-and-sql` (Services & Storage): SQL with sqlite3.** In-memory databases (`sqlite3.connect(":memory:")`): `execute`/`executemany`, fetching and cursor iteration, parameter binding (`?` and `:name`) vs injection, `row_factory = sqlite3.Row`, transactions with `with conn:`, schema and constraints, joins and aggregates, `lastrowid`, date adapters (the default adapters were deprecated in 3.12), and ORMs (SQLAlchemy, static) vs Prisma/knex/better-sqlite3.
+
+## Course: Advanced Python (`advanced-python`)
+
+Parts: `The Object Model`, `Functions & Generators`, `Types & Metaprogramming`, `Runtime & Concurrency`. A standard lesson format for readers who have finished the core course. Go deep: show the mechanism, then build a small version of the library feature yourself.
+
+**01 `attribute-lookup` (The Object Model): How Attribute Lookup Works.** Instance and class `__dict__`, `__mro__`, the full lookup order (data descriptors → instance dict → non-data descriptors and class attributes → `__getattr__`), `__getattribute__` vs `__getattr__`, `__setattr__`/`__delattr__` and the `object.__setattr__` recursion trap, `super()` mechanics (MRO-based; zero-argument `super` uses the `__class__` cell), how bound methods are created, `vars()`/`dir()`, and `__slots__`. Compared with the JS prototype chain and Proxy traps.
+
+**02 `descriptors` (The Object Model): Descriptors.** `__get__`/`__set__`/`__delete__`/`__set_name__`, data vs non-data precedence, and how `property`, functions → bound methods, `classmethod`, `staticmethod` and `cached_property` are all descriptors (implement mini versions). Validated and typed fields, lazy attributes, ORM-style columns, per-instance storage. Compared with `Object.defineProperty`.
+
+**03 `metaclasses` (The Object Model): Classes as Objects & Metaclasses.** Classes are instances of `type`, `type(name, bases, ns)`, the class-creation sequence (`__prepare__`, body, `__new__`, `__init__`, `__set_name__`, `__init_subclass__`). Prefer `__init_subclass__` for registries. Class decorators, metaclasses for validation and registries, singletons via `__call__`, `ABCMeta`, `__class_getitem__`, and when *not* to use metaclasses. Compared with JS class factories and mixins.
+
+**04 `functional-python` (Functions & Generators): Functional Programming in Python.** Closure internals (`__closure__`, cells), `functools` in depth (`partial`/`partialmethod`, `reduce`, `singledispatch`/`singledispatchmethod`, `cache`/`lru_cache` with `cache_info` and the mutable-argument pitfalls, `wraps` and `__wrapped__`, `total_ordering`, `cmp_to_key`), the `operator` module, composition and pipelines, currying, immutability (tuples, frozenset, `MappingProxyType`, frozen dataclasses), and why there's no TCO. Compared with Ramda and lodash/fp.
+
+**05 `generators-in-depth` (Functions & Generators): Generators & Coroutines in Depth.** The full generator protocol (`send`, `throw`, `close`, `GeneratorExit`, `StopIteration.value`), priming, `yield from` delegation (return values, exception forwarding), push vs pull pipelines, how `@contextmanager` works, itertools recipes (pairwise, sliding window, roundrobin, partition, unique-everseen, batched, flatten), the caveats of `tee`, async generators (`aclose`, `async for`), and cleanup semantics. Compared with JS `gen.next(v)`/`return`/`throw`.
+
+**06 `typing-in-depth` (Types & Metaprogramming): Advanced Typing.** PEP 695 generics (bounds, constraints, defaults from PEP 696 in 3.13), variance, generic `Protocol`s, `ParamSpec`/`Concatenate` for typing decorators, `TypeVarTuple`, `Self`, `@overload`, advanced `TypedDict` (`Required`/`NotRequired`/`ReadOnly`, `Unpack` for `**kwargs`), `TypeIs`, `Never`/`assert_never` exhaustiveness, `Literal`/`LiteralString`, `Annotated` metadata, and runtime introspection (`get_type_hints(include_extras=True)`, `get_origin`, `get_args`, 3.14's `annotationlib`). TS features with no equivalent (conditional and mapped types). Challenges are runtime checkers built from hints.
+
+**07 `introspection-and-ast` (Types & Metaprogramming): Introspection & the ast Module.** `inspect` (`signature`, `bind`, `getsource`, `getmembers`, predicates), `ast` (parse, dump, walk, `NodeVisitor`, `NodeTransformer`, `unparse`, `literal_eval` for safe evaluation), `dis`, the dangers of `compile`/`exec`/`eval`, building a mini linter, code transformation, and `importlib` (`import_module`, `reload`, `importlib.metadata`) plus plugin discovery. Compared with acorn/babel, `Function()` and `eval`.
+
+**08 `pythonic-api-design` (Types & Metaprogramming): Designing Pythonic APIs.** Protocol-first design (`__iter__`, `__len__`, `__contains__`, `__enter__`), keyword-only parameters and sentinels, rich return types (dataclasses/NamedTuple) vs tuples and dicts, `__repr__` conventions, exception hierarchies for libraries, context managers and decorators as API surface, fluent interfaces vs Python style, `__all__` and the public surface, deprecation (`warnings.warn(..., DeprecationWarning, stacklevel=2)`, `warnings.deprecated` in 3.13), and backwards compatibility. Compared with JS library conventions (options objects, chaining).
+
+**09 `cpython-internals` (Runtime & Concurrency): CPython Internals: Memory & Execution.** Refcounting (`sys.getrefcount`), garbage collection and cycles (`gc`), `weakref` (`ref`, `WeakValueDictionary`, `finalize`) vs `WeakRef`/`FinalizationRegistry`, object sizes, the small-int cache and interning (as the reason `is` misleads), `__slots__` savings, `array`/`memoryview`/`bytearray`, bytecode and the specialising adaptive interpreter (3.11+), the experimental JIT (3.13+), the GIL and free-threaded builds (3.13t/3.14t, PEP 703), `__pycache__`, and Pyodide itself (CPython compiled to WebAssembly). Keep tests deterministic: call `gc.collect()` explicitly.
+
+**10 `concurrency-models` (Runtime & Concurrency): Concurrency Models: Threads, Processes & asyncio.** The GIL and CPU-bound vs I/O-bound work. `threading` (Thread, Lock, Event, Queue, `ThreadPoolExecutor`) and `multiprocessing`/`ProcessPoolExecutor` as static code, since there are no threads in the sandbox. The `concurrent.futures` API (static). asyncio in depth (runnable): tasks, cancellation and `CancelledError`, `TaskGroup`, `asyncio.timeout`, `shield`, semaphores, queues and backpressure. `contextvars` (runnable; ≈ `AsyncLocalStorage`), free-threading, choosing a model. Compared with Node's event loop, `worker_threads` and `cluster`.
+
+## Course: Algorithms & Interview Prep (`algorithms`)
+
+Parts: `Toolkit`, `Patterns`, `Structures`, `Techniques`. **Challenge-heavy format** (see [Course formats](#course-formats)). Prefix challenge ids with `algo-`.
+
+**01 `algorithm-toolkit` (Toolkit): Python's Algorithm Toolkit.** A complexity table of the built-ins (list, dict, set, deque, str, heapq, bisect). `collections` (deque, Counter, defaultdict, OrderedDict), `heapq` (min-heap only, the negation trick, tuple tie-breakers, `nlargest`/`nsmallest`), `bisect`, `sorted` with `key`, `itertools` (`accumulate`, `combinations`, `permutations`, `product`, `pairwise`), `math.inf`, big ints, `functools.cache` (with the sandbox depth caveat), and the recursion limit. JS has no built-in heap or deque. 4 challenges.
+
+**02 `two-pointers-and-windows` (Patterns): Two Pointers, Sliding Windows & Prefix Sums.** Opposite-end pointers, fast/slow pointers, in-place compaction, fixed and variable windows (longest substring without repeats), prefix sums with `accumulate`, subarray-sum-equals-k with a Counter, Kadane. 5 challenges.
+
+**03 `hashing-patterns` (Patterns): Hash Maps & Sets.** Frequency maps, two-sum, grouping by a canonical key (anagrams), order-preserving dedupe, longest consecutive sequence, first unique element, isomorphic strings, set algebra. 5 challenges.
+
+**04 `sorting-and-searching` (Patterns): Sorting & Binary Search.** Keys, stability and multi-key sorts, `cmp_to_key` for custom orders (largest concatenated number), `bisect_left`/`bisect_right` (with `key=` from 3.10), binary search on the answer, k-th largest (heapq vs quickselect), intervals (merge, insert, meeting rooms with a heap). 5 challenges.
+
+**05 `stacks-queues-heaps` (Structures): Stacks, Queues & Heaps.** List as stack, deque as queue, balanced brackets, monotonic stacks (next greater element, daily temperatures), min-stack, RPN evaluation, top-k, `heapq.merge` for k sorted streams, running median with two heaps. 5 challenges.
+
+**06 `linked-lists-and-trees` (Structures): Linked Lists & Trees.** `@dataclass(slots=True)` nodes and helpers to build from and to Python lists. Reverse, cycle detection (Floyd), merge two sorted lists. Binary-tree traversals (recursive with `yield from`, iterative with a stack), level order with deque, depth, BST insert/search/validate with bounds, lowest common ancestor. Keep tree depths modest. 5 challenges.
+
+**07 `graphs` (Structures): Graphs.** Adjacency dicts (`defaultdict(list)`) and grids, BFS shortest paths with deque, **iterative** DFS, connected components/islands, topological sort (Kahn, with indegree counts) and cycle detection, Dijkstra with heapq, union-find with path compression, bipartite check. 5 challenges.
+
+**08 `recursion-and-backtracking` (Techniques): Recursion & Backtracking.** Python's recursion limit and the sandbox caveat, the choose/explore/unchoose template, subsets, permutations (and `itertools` equivalents), combination sum, N-Queens (n ≤ 8), word search, generating parentheses, pruning, generator-based backtracking with `yield`. 5 challenges.
+
+**09 `dynamic-programming` (Techniques): Dynamic Programming.** Recognising overlapping subproblems. Top-down with `@cache` (keep depth ≤ about 500 in the sandbox) vs bottom-up tables (preferred for big inputs). 1D DP (climbing stairs, house robber, coin change: min coins and number of ways), 2D DP (grid paths, edit distance, LCS, 0/1 knapsack), LIS in O(n log n) with bisect, rolling-array space optimisation, reconstructing the answer. 5 challenges, each with a large-input test that needs the efficient approach.
+
+## Course: JS → Python Drills (`translation-drills`)
+
+Parts: `Warm-up`, `Collections`, `Functions & Objects`, `Async & Errors`, `Refactoring`. **Drill format** (see [Course formats](#course-formats)).
+
+**01 `drills-syntax-and-strings` (Warm-up): Drills: Syntax & Strings.** Template literals, string methods (`padStart`, `includes`, `slice`, `split`/`join`, `trim`, `replaceAll`, case), number formatting (`toFixed`, grouping), ternaries and `??` defaults, `switch` → `match`, index loops, `typeof` → `isinstance`, `parseInt` with validation → `try`/`except`.
+
+**02 `drills-arrays` (Collections): Drills: Array Methods.** `map`/`filter`/`reduce` chains → comprehensions, `sum`, and so on; `find`/`findIndex`/`findLast`; `some`/`every`; `flat`/`flatMap`; comparator sorts → `key` (multi-key, descending); `slice`/`splice`; `Array.from({length})`; reduce-to-object → dict comprehension; `groupBy` → defaultdict; index-parallel loops → `zip`; chunk and partition.
+
+**03 `drills-objects-maps-sets` (Collections): Drills: Objects, Maps & Sets.** Spread merges → `|`, destructuring with defaults, `Object.entries`/`fromEntries`, optional-chaining deep get, `Map` counting → `Counter`, Set operations, JSON round trips, `structuredClone` → `deepcopy`, pick/omit, inverting an object.
+
+**04 `drills-functions-and-classes` (Functions & Objects): Drills: Functions & Classes.** Default and rest params, closures (counter, `once`), currying/partial, memoize, getters/setters → `property`, static factories → `classmethod`, `extends`/`super`, `toString`/`toJSON` → `__str__`/`__repr__`/`asdict`, `Symbol.iterator` → `__iter__`, `Object.freeze` enums → `Enum`.
+
+**05 `drills-async-and-errors` (Async & Errors): Drills: Async & Errors.** async functions, `Promise.all` → `gather`, `allSettled` → `return_exceptions=True`, `race`/timeouts → `asyncio.timeout`/`wait_for`, retry with backoff (inject the sleep), `for await` → `async for`, try/catch/finally, custom `Error` subclasses, `cause` → `raise ... from`, `AggregateError` → `ExceptionGroup`. Async tests are supported (`@test` on an `async def`).
+
+**06 `drills-make-it-pythonic` (Refactoring): Drills: Make It Pythonic.** Starters are working, JS-flavoured Python. Learners refactor to idiomatic Python, and tests check identical behaviour plus AST constraints: no `range(len(...))`, `enumerate`/`zip`, comprehensions instead of append loops, `with` for files, `dict.get`/`defaultdict`, unpacking and swaps, `any`/`all`, `str.join`, EAFP, f-strings instead of concatenation.
+
+## Course: Guided Projects (`projects`)
+
+Parts: `Interpreters & Text`, `Apps & Data`, `Systems`. **Project format** (see [Course formats](#course-formats)): 5 or 6 steps, each one a challenge whose starter carries all earlier steps' reference code.
+
+**01 `project-calculator` (Interpreters & Text): Build an Expression Calculator.** A tokenizer (regex with named groups → `Token` dataclasses), a recursive-descent parser with precedence and parentheses producing an AST of dataclasses, an evaluator using `match`, variables and assignment through an environment dict, custom exceptions carrying positions, and `evaluate_lines()`. Ids `calc-step-N`.
+
+**02 `project-markdown` (Interpreters & Text): Build a Markdown-to-HTML Converter.** HTML escaping, inline formatting (bold, italic, code, links) with `re.sub` and callbacks, a line-based block state machine (headings, paragraphs, lists, fenced code, blockquotes), a generator pipeline, and `render(markdown) -> str`. Ids `md-step-N`.
+
+**03 `project-todo-cli` (Apps & Data): Build a Todo CLI.** A `Task` dataclass with JSON serialisation, a `TaskStore` saving to a JSON file in the in-memory filesystem, an argparse command parser with subcommands (`add`, `done`, `list --all`, `remove`), filtering and sorting by priority and due date, table output, and `main(argv) -> int` (test it with `output_of`). Ids `todo-step-N`.
+
+**04 `project-ledger` (Apps & Data): Build an Event-Sourced Ledger.** Events as frozen dataclasses, applying them with `match` (deposit, withdraw, transfer), validation with custom exceptions, projections (balances, history), replay from a JSON-lines log, undo via compensating events, and reports. Ids `ledger-step-N`.
+
+**05 `project-text-adventure` (Apps & Data): Build a Text Adventure Engine.** A world loaded from data (a rooms graph), command parsing with `match` on `split()` (go, take, drop, look, inventory), a game-state dataclass, win and lose conditions, save/load as JSON, and `play(commands) -> transcript` for deterministic tests. Ids `adventure-step-N`.
+
+**06 `project-test-runner` (Systems): Build a Tiny Test Runner.** A `@test` registry decorator, running tests and collecting results, assertion messages, fixtures injected by parameter name (`inspect.signature`), `@parametrize`, setup/teardown via context managers, a pytest-like report (`..F.` plus a summary), and discovery from a namespace dict. Ids `runner-step-N`.
+
+**07 `project-async-crawler` (Systems): Build an Async Web Crawler.** A fake async fetcher (a dict of URL → HTML with simulated latency via `asyncio.sleep(0)`), link extraction (`html.parser` or regex), BFS crawling with `asyncio.Queue` and worker tasks, a `Semaphore` concurrency limit, retries and timeouts for flaky pages, depth limits and dedupe, and a summary. Everything deterministic. Ids `crawler-step-N`.
+
+**08 `project-caches` (Systems): Build Caches & Rate Limiters.** An LRU cache class on `OrderedDict`, an `@lru` decorator on top of it with stats, a TTL cache with an injectable clock, a token-bucket rate limiter (injectable clock), a sliding-window limiter, and a cached, rate-limited client combining them. Ids `cache-step-N`.
+
+## Course: Checkpoints (`checkpoints`)
+
+Part: `Core Course Exams`. **Checkpoint format** (see [Course formats](#course-formats)). Each exam covers one part of the core course. Prefix challenge ids with `exam-`.
+
+**01 `exam-foundations`: Exam: Foundations.** Covers `first-contact`, `variables-and-scope`, `numbers-and-math`, `strings`, `truthiness-and-equality` and `control-flow`.
+
+**02 `exam-collections`: Exam: Collections.** Covers `lists`, `map-filter-reduce`, `tuples-and-unpacking`, `dicts` and `sets`.
+
+**03 `exam-functions-and-iteration`: Exam: Functions & Iteration.** Covers `functions`, `decorators` and `iterators-and-generators`.
+
+**04 `exam-objects-and-classes`: Exam: Objects & Classes.** Covers `classes`, `dunder-methods` and `dataclasses-and-enums`.
+
+**05 `exam-robust-code`: Exam: Robust Code.** Covers `exceptions`, `context-managers` and `modules-and-tooling`.
+
+**06 `exam-advanced-python`: Exam: Advanced Python.** Covers `async`, `type-hints`, `pattern-matching`, `standard-library` and `gotchas`.

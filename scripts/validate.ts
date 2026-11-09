@@ -1,24 +1,26 @@
 // Content validator: parses every lesson and executes its Python with the
 // exact Pyodide build + harness the browser uses.
 //
-//   npm run validate                    # everything
-//   npm run validate -- 07 dicts        # lessons whose filename contains "07" or "dicts"
-//   npm run validate -- --no-run        # structure/link checks only (fast)
+//   npm run validate                        # everything
+//   npm run validate -- 07-lists dicts      # lessons whose path contains "07-lists" or "dicts"
+//   npm run validate -- algorithms          # a whole course (paths include the course id)
+//   npm run validate -- --no-run            # structure/link checks only (fast)
 //
-// Checks: frontmatter, unique slugs/challenge ids, `lesson:` links, every
-// `python run` playground runs (or raises, if flagged `raises`), every other
-// python fence parses (unless flagged `nocheck`), `:::quiz output` answers
-// match real stdout, challenge solutions pass their tests and starters don't.
+// Checks: course.json files, frontmatter (the part must belong to the
+// lesson's course), unique slugs/challenge ids across all courses, `lesson:`
+// links, every `python run` playground runs (or raises, if flagged `raises`),
+// every other python fence parses (unless flagged `nocheck`), `:::quiz
+// output` answers match real stdout, challenge solutions pass their tests and
+// starters don't.
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { loadPyodide } from 'pyodide';
+import { COURSES_DIR, listCourses, type CourseOnDisk } from '../plugins/content/courses.ts';
 import { ContentError, parseLesson, parseReference, scanLessonLinks, type Fence, type ParsedLesson } from '../plugins/content/parse.ts';
-import { PARTS } from '../plugins/content/parts.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const LESSONS_DIR = resolve(ROOT, 'content/lessons');
 const REFERENCE_FILE = resolve(ROOT, 'content/reference.md');
 const TIMEOUT_MS = 10_000;
 
@@ -48,24 +50,32 @@ const warn = (file: string, line: number, message: string) => issues.push({ file
 // Parse everything (always; link checks need the full set)
 // --------------------------------------------------------------------------
 
-const lessonFiles = existsSync(LESSONS_DIR)
-  ? readdirSync(LESSONS_DIR).filter((f) => /^\d+-[a-z0-9-]+\.md$/.test(f)).sort()
-  : [];
+let courses: CourseOnDisk[] = [];
+try {
+  courses = listCourses(ROOT);
+} catch (e) {
+  if (!(e instanceof ContentError)) throw e;
+  console.error(red(e.message));
+  process.exit(1);
+}
+
+const lessonPaths = courses.flatMap((course) => course.lessonFiles.map((name) => `${COURSES_DIR}/${course.id}/${name}`));
+const courseOf = new Map<string, CourseOnDisk>(
+  courses.flatMap((course) => course.lessonFiles.map((name) => [`${COURSES_DIR}/${course.id}/${name}`, course] as const)),
+);
 const parsed: ParsedLesson[] = [];
-for (const name of lessonFiles) {
+for (const path of lessonPaths) {
   try {
-    parsed.push(parseLesson(readFileSync(resolve(LESSONS_DIR, name), 'utf8'), `content/lessons/${name}`));
+    parsed.push(parseLesson(readFileSync(resolve(ROOT, path), 'utf8'), path));
   } catch (e) {
     if (e instanceof ContentError) error(e.file, e.line, e.message.replace(`${e.file}:${e.line}: `, ''));
     else throw e;
   }
 }
 
-// Filters select by filename, so a selected lesson that failed to parse still
-// gets its errors reported.
-const isSelected = new Set(
-  lessonFiles.filter((n) => !filters.length || filters.some((f) => n.includes(f))).map((n) => `content/lessons/${n}`),
-);
+// Filters select by path (course id or file name), so a selected lesson that
+// failed to parse still gets its errors reported.
+const isSelected = new Set(lessonPaths.filter((p) => !filters.length || filters.some((f) => p.includes(f))));
 const selected = parsed.filter((l) => isSelected.has(l.file));
 
 const bySlug = new Map<string, ParsedLesson>();
@@ -86,10 +96,11 @@ for (const lesson of parsed) {
 
 for (const lesson of selected) {
   const fm = lesson.frontmatter;
+  const parts = courseOf.get(lesson.file)?.parts ?? [];
   if (!fm.title) error(lesson.file, 1, 'frontmatter: missing title');
   if (!fm.summary) error(lesson.file, 1, 'frontmatter: missing summary');
-  if (!fm.part || !(PARTS as readonly string[]).includes(fm.part)) {
-    error(lesson.file, 1, `frontmatter: part must be one of ${PARTS.map((p) => `"${p}"`).join(', ')}`);
+  if (!fm.part || !parts.includes(fm.part)) {
+    error(lesson.file, 1, `frontmatter: part must be one of this course's parts: ${parts.map((p) => `"${p}"`).join(', ')}`);
   }
   if (fm.minutes && !/^\d+$/.test(fm.minutes)) error(lesson.file, 1, 'frontmatter: minutes must be a whole number');
   if (!lesson.challenges.length) warn(lesson.file, 1, 'lesson has no challenges');

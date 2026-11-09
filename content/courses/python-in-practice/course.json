@@ -1,0 +1,8 @@
+{
+  "title": "Python in Practice",
+  "summary": "Everyday Python: files, text and data formats, dates, data wrangling, command-line tools, logging, testing, performance, HTTP APIs and SQL.",
+  "level": "After the core course",
+  "icon": "terminal",
+  "order": 2,
+  "parts": ["Files & Data", "Tools & Automation", "Quality & Testing", "Services & Storage"]
+}

@@ -1,0 +1,8 @@
+{
+  "title": "Advanced Python",
+  "summary": "How Python really works: attribute lookup, descriptors, metaclasses, functional tools, generators in depth, advanced typing, introspection, CPython internals and concurrency.",
+  "level": "Advanced",
+  "icon": "sparkle",
+  "order": 3,
+  "parts": ["The Object Model", "Functions & Generators", "Types & Metaprogramming", "Runtime & Concurrency"]
+}

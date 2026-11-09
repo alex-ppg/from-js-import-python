@@ -21,7 +21,7 @@ import {
   type ReferenceSpec,
   type Segment,
 } from './parse.ts';
-import { PARTS } from './parts.ts';
+import type { CourseConfig } from './courses.ts';
 import type {
   ChallengeData,
   CompiledBody,
@@ -95,7 +95,7 @@ function plainText(inlineMarkdown: string): string {
 }
 
 export interface Renderer {
-  renderLesson(parsed: ParsedLesson): CompiledLesson;
+  renderLesson(parsed: ParsedLesson, course: Pick<CourseConfig, 'id' | 'parts'>): CompiledLesson;
   /** A free-standing Markdown page (e.g. content/home.md). */
   renderPage(src: string, file: string): CompiledBody;
   renderReference(specs: ReferenceSpec[]): CompiledReference;
@@ -248,13 +248,15 @@ export async function createRenderer(): Promise<Renderer> {
         case 'quiz': {
           const quiz = parseQuiz(seg, env.file);
           const index = quizzes.length;
+          const questionHtml = render(quiz.question, env);
           quizzes.push({
+            questionHtml,
             optionsHtml: quiz.options.map((o) => md.renderInline(o.text)),
             correct: quiz.options.findIndex((o) => o.correct),
             explanationHtml: quiz.explanation ? render(quiz.explanation, env) : '',
             code: quiz.code?.code ?? null,
           });
-          html += `<div class="quiz" data-quiz="${index}"><div class="quiz-question">${render(quiz.question, env)}</div></div>\n`;
+          html += `<div class="quiz" data-quiz="${index}"><div class="quiz-question">${questionHtml}</div></div>\n`;
           break;
         }
         case 'challenge': {
@@ -283,11 +285,11 @@ export async function createRenderer(): Promise<Renderer> {
   };
 
   return {
-    renderLesson(parsed) {
+    renderLesson(parsed, course) {
       const fm = parsed.frontmatter;
       if (!fm.title) throw new ContentError('frontmatter needs a title', parsed.file, 1);
-      if (!fm.part || !(PARTS as readonly string[]).includes(fm.part)) {
-        throw new ContentError(`frontmatter "part" must be one of: ${PARTS.join(', ')}`, parsed.file, 1);
+      if (!fm.part || !course.parts.includes(fm.part)) {
+        throw new ContentError(`frontmatter "part" must be one of this course's parts: ${course.parts.join(', ')}`, parsed.file, 1);
       }
       if (!fm.summary) throw new ContentError('frontmatter needs a summary', parsed.file, 1);
 
@@ -297,6 +299,7 @@ export async function createRenderer(): Promise<Renderer> {
       return {
         meta: {
           slug: parsed.slug,
+          course: course.id,
           fileName: parsed.file.split(/[\\/]/).pop() ?? parsed.file,
           order: parsed.order,
           title: fm.title,

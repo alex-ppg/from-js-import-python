@@ -17,8 +17,23 @@ export interface ChallengeSummary {
   difficulty: Difficulty;
 }
 
+export interface CourseMeta {
+  id: string;
+  title: string;
+  summary: string;
+  /** Short positioning label, e.g. "Start here". */
+  level: string;
+  icon: string;
+  order: number;
+  parts: string[];
+  /** Lesson slugs in curriculum order. */
+  lessons: string[];
+}
+
 export interface LessonMeta {
   slug: string;
+  /** Course id (directory name under content/courses). */
+  course: string;
   /** Source file name, e.g. `07-lists.md`. */
   fileName: string;
   order: number;
@@ -39,6 +54,8 @@ export interface PlaygroundData {
 }
 
 export interface QuizData {
+  /** The question (prose + code), also usable outside the lesson (review mode). */
+  questionHtml: string;
   optionsHtml: string[];
   correct: number;
   explanationHtml: string;

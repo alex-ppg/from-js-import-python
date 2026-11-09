@@ -1,11 +1,11 @@
 // Ctrl/Cmd+K command palette: fuzzy-ish search over lessons, sections,
 // challenges, pages and (lazily loaded) reference entries.
 
-import { challenges, lessons, loadReference } from '../content.ts';
+import { challenges, courseMeta, courses, lessons, loadReference } from '../content.ts';
 import { escapeHtml, h, icon } from '../lib/dom.ts';
-import { lessonHref } from '../lib/router.ts';
+import { courseHref, lessonHref } from '../lib/router.ts';
 
-type Kind = 'page' | 'lesson' | 'section' | 'challenge' | 'reference';
+type Kind = 'page' | 'course' | 'lesson' | 'section' | 'challenge' | 'reference';
 
 interface Item {
   kind: Kind;
@@ -21,31 +21,47 @@ interface Item {
 
 const KIND_LABEL: Record<Kind, string> = {
   page: 'Page',
+  course: 'Course',
   lesson: 'Lesson',
   section: 'Section',
   challenge: 'Challenge',
   reference: 'JS → Py',
 };
-const KIND_BOOST: Record<Kind, number> = { page: 2, lesson: 3, challenge: 1.5, section: 1, reference: 1.2 };
+const KIND_BOOST: Record<Kind, number> = { page: 2, course: 3.2, lesson: 3, challenge: 1.5, section: 1, reference: 1.2 };
 
 const stripTags = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 
 function baseItems(): Item[] {
   const items: Item[] = [
-    { kind: 'page', title: 'Home', subtitle: 'Curriculum overview and progress', href: '#/' },
+    { kind: 'page', title: 'Home', subtitle: 'Overview and progress', href: '#/' },
+    { kind: 'page', title: 'Courses', subtitle: 'Every course on the site', href: '#/courses' },
     { kind: 'page', title: 'Practice', subtitle: 'Every challenge in one place', href: '#/practice' },
+    { kind: 'page', title: 'Quiz review', subtitle: 'Spaced review of every quiz', href: '#/review/quiz' },
+    { kind: 'page', title: 'Flashcards', subtitle: 'Drill the JS → Python reference', href: '#/review/flashcards' },
     { kind: 'page', title: 'Reference', subtitle: 'JS → Python lookup table', href: '#/reference' },
     { kind: 'page', title: 'Playground', subtitle: 'A scratchpad that runs Python', href: '#/playground' },
   ].map((item) => ({ ...(item as Omit<Item, 'key' | 'haystack'>), key: item.title.toLowerCase(), haystack: `${item.title} ${item.subtitle}`.toLowerCase() }));
 
+  for (const course of courses) {
+    items.push({
+      kind: 'course',
+      title: course.title,
+      subtitle: `${course.level} · ${course.lessons.length} lessons`,
+      href: courseHref(course.id),
+      key: course.title.toLowerCase(),
+      haystack: `${course.title} ${course.summary} ${course.id} course`.toLowerCase(),
+    });
+  }
+
   for (const lesson of lessons) {
+    const course = courseMeta(lesson.course);
     items.push({
       kind: 'lesson',
       title: lesson.title,
-      subtitle: `${String(lesson.order).padStart(2, '0')} · ${lesson.part}`,
+      subtitle: `${course ? `${course.title} · ` : ''}${String(lesson.order).padStart(2, '0')} · ${lesson.part}`,
       href: lessonHref(lesson.slug),
       key: lesson.title.toLowerCase(),
-      haystack: `${lesson.title} ${lesson.summary} ${lesson.slug}`.toLowerCase(),
+      haystack: `${lesson.title} ${lesson.summary} ${lesson.slug} ${course?.title ?? ''}`.toLowerCase(),
     });
     for (const entry of lesson.toc) {
       items.push({
@@ -121,7 +137,7 @@ function ensureDialog(): HTMLDialogElement {
           .sort((a, b) => b.s - a.s)
           .slice(0, 40)
           .map((r) => r.item)
-      : items.filter((item) => item.kind === 'page' || item.kind === 'lesson').slice(0, 12);
+      : items.filter((item) => item.kind === 'page' || item.kind === 'course').slice(0, 14);
     selected = Math.min(selected, Math.max(0, results.length - 1));
     list.replaceChildren(
       ...results.map((item, i) => {

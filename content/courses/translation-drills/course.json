@@ -1,0 +1,8 @@
+{
+  "title": "JS → Python Drills",
+  "summary": "Short, focused reps: read a JavaScript snippet, write the idiomatic Python. Tests check both behaviour and style.",
+  "level": "Practice",
+  "icon": "code",
+  "order": 5,
+  "parts": ["Warm-up", "Collections", "Functions & Objects", "Async & Errors", "Refactoring"]
+}

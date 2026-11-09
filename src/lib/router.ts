@@ -2,15 +2,23 @@
 // even a sub-folder) with no server-side fallback rules.
 //
 //   #/                         home
+//   #/courses                  every course
+//   #/course/<id>              one course's curriculum
 //   #/learn/<slug>[/<anchor>]  lesson, optionally scrolled to a heading/challenge
 //   #/practice                 every challenge
+//   #/review[/quiz|/flashcards] spaced review of quizzes and reference cards
 //   #/reference[/<entry>]?q=   JS -> Python lookup table
 //   #/playground?code=         scratchpad (code is base64url-encoded)
 
+export type ReviewMode = 'hub' | 'quiz' | 'flashcards';
+
 export type Route =
   | { name: 'home' }
+  | { name: 'courses' }
+  | { name: 'course'; id: string }
   | { name: 'lesson'; slug: string; anchor: string | null }
   | { name: 'practice' }
+  | { name: 'review'; mode: ReviewMode }
   | { name: 'reference'; entry: string | null; query: string }
   | { name: 'playground'; code: string | null }
   | { name: 'notfound' };
@@ -32,9 +40,17 @@ export function parseHash(hash: string): Route {
     case undefined:
       return { name: 'home' };
     case 'learn':
-      return segments[1] ? { name: 'lesson', slug: segments[1], anchor: segments[2] ?? null } : { name: 'home' };
+      return segments[1] ? { name: 'lesson', slug: segments[1], anchor: segments[2] ?? null } : { name: 'courses' };
+    case 'courses':
+      return { name: 'courses' };
+    case 'course':
+      return segments[1] ? { name: 'course', id: segments[1] } : { name: 'courses' };
     case 'practice':
       return { name: 'practice' };
+    case 'review': {
+      const mode = segments[1] ?? 'hub';
+      return mode === 'quiz' || mode === 'flashcards' || mode === 'hub' ? { name: 'review', mode } : { name: 'notfound' };
+    }
     case 'reference':
       return { name: 'reference', entry: segments[1] ?? null, query: params.get('q') ?? '' };
     case 'playground':
@@ -60,6 +76,10 @@ export function navigate(hash: string, { replace = false } = {}): void {
 
 export function lessonHref(slug: string, anchor?: string | null): string {
   return `#/learn/${slug}${anchor ? `/${anchor}` : ''}`;
+}
+
+export function courseHref(id: string): string {
+  return `#/course/${id}`;
 }
 
 // base64url for sharing playground code in the URL.

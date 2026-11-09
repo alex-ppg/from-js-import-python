@@ -1,27 +1,29 @@
-// App chrome: top bar, curriculum sidebar (a drawer on small screens), the
-// Python runtime status pill, theme toggle and search entry point.
+// App chrome: top bar, the current course's curriculum sidebar (a drawer on
+// small screens), the Python runtime status pill, theme toggle and search.
 
-import { challenges, lessons, parts, type LessonMeta } from '../content.ts';
+import { challengesOf, coreCourse, courseMeta, courses, lessonMeta, lessonsOf, partsOf, type CourseMeta, type LessonMeta } from '../content.ts';
 import { openPalette } from '../components/palette.ts';
 import { REPO_URL } from '../config.ts';
 import { h, icon } from '../lib/dom.ts';
 import { progress } from '../lib/progress.ts';
-import { lessonHref } from '../lib/router.ts';
+import { courseHref, lessonHref } from '../lib/router.ts';
 import { currentTheme, onThemeChange, toggleTheme } from '../lib/theme.ts';
 import { python, type RuntimeState } from '../python/client.ts';
 
-export type NavKey = 'home' | 'learn' | 'practice' | 'reference' | 'playground' | null;
+export type NavKey = 'home' | 'courses' | 'practice' | 'review' | 'reference' | 'playground' | null;
 
 export interface Shell {
   main: HTMLElement;
   setLayout(layout: 'docs' | 'wide'): void;
-  setActive(nav: NavKey, lessonSlug?: string | null): void;
+  /** Highlight a nav item and point the sidebar at a lesson's (or a course's) curriculum. */
+  setActive(nav: NavKey, focus?: { lesson?: string; course?: string }): void;
   closeDrawer(): void;
 }
 
-/** The first lesson not yet marked complete (where "Learn" should take you). */
-export function continueLesson(): LessonMeta | undefined {
-  return lessons.find((lesson) => !progress.lesson(lesson.slug).completed) ?? lessons[0];
+/** The first lesson of a course not yet marked complete. */
+export function continueLesson(courseId = coreCourse?.id ?? ''): LessonMeta | undefined {
+  const own = lessonsOf(courseId);
+  return own.find((lesson) => !progress.lesson(lesson.slug).completed) ?? own[0];
 }
 
 export function lessonStatus(lesson: LessonMeta): 'done' | 'started' | 'new' {
@@ -35,14 +37,48 @@ export function solvedCount(lesson: LessonMeta): number {
   return lesson.challenges.filter((c) => progress.challenge(c.id).solved).length;
 }
 
+export interface CourseStats {
+  lessons: number;
+  completed: number;
+  challenges: number;
+  solved: number;
+  started: boolean;
+}
+
+export function courseStats(course: CourseMeta): CourseStats {
+  const own = lessonsOf(course.id);
+  const ownChallenges = challengesOf(course.id);
+  return {
+    lessons: own.length,
+    completed: own.filter((l) => progress.lesson(l.slug).completed).length,
+    challenges: ownChallenges.length,
+    solved: ownChallenges.filter((c) => progress.challenge(c.id).solved).length,
+    started: own.some((l) => lessonStatus(l) !== 'new'),
+  };
+}
+
 const STATUS_ICON = { done: 'done', started: 'half', new: 'circle' } as const;
 
 export function brandMarkup(): string {
   return '<span class="tk-kw">from</span> <span class="tk-mod">js</span> <span class="tk-kw">import</span> <span class="tk-mod">python</span>';
 }
 
+export function meter(label: string, value: number, total: number): HTMLElement {
+  return h(
+    'div',
+    { class: 'meter' },
+    h('div', { class: 'meter-row' }, h('span', null, label), h('span', { class: 'meter-value' }, `${value}/${total}`)),
+    h(
+      'div',
+      { class: 'meter-track', role: 'progressbar', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(value) },
+      h('div', { class: 'meter-fill', style: `width:${total ? (value / total) * 100 : 0}%` }),
+    ),
+  );
+}
+
 export function createShell(root: HTMLElement): Shell {
   let currentSlug: string | null = null;
+  let currentCourse: string = coreCourse?.id ?? '';
 
   // ---- top bar -----------------------------------------------------------
   const menuButton = h('button', {
@@ -56,8 +92,9 @@ export function createShell(root: HTMLElement): Shell {
   });
 
   const navLinks = {
-    learn: h('a', { class: 'topnav-link', href: '#/' }, 'Learn'),
+    courses: h('a', { class: 'topnav-link', href: '#/courses' }, 'Courses'),
     practice: h('a', { class: 'topnav-link', href: '#/practice' }, 'Practice'),
+    review: h('a', { class: 'topnav-link', href: '#/review' }, 'Review'),
     reference: h('a', { class: 'topnav-link', href: '#/reference' }, 'Reference'),
     playground: h('a', { class: 'topnav-link', href: '#/playground' }, 'Playground'),
   };
@@ -125,27 +162,48 @@ export function createShell(root: HTMLElement): Shell {
   // ---- sidebar -------------------------------------------------------------
   const sidebar = h('aside', { class: 'sidebar', id: 'sidebar', 'aria-label': 'Curriculum' });
   const renderSidebar = () => {
-    const done = lessons.filter((l) => progress.lesson(l.slug).completed).length;
-    const solved = challenges.filter((c) => progress.challenge(c.id).solved).length;
-    const bar = (label: string, value: number, total: number) =>
-      h(
-        'div',
-        { class: 'meter' },
-        h('div', { class: 'meter-row' }, h('span', null, label), h('span', { class: 'meter-value' }, `${value}/${total}`)),
-        h('div', { class: 'meter-track', role: 'progressbar', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(value) }, h('div', { class: 'meter-fill', style: `width:${total ? (value / total) * 100 : 0}%` })),
-      );
+    const course = courseMeta(currentCourse) ?? coreCourse;
+    if (!course) {
+      sidebar.replaceChildren();
+      return;
+    }
+    const stats = courseStats(course);
 
     const mobileNav = h(
       'nav',
       { class: 'sidebar-pages', 'aria-label': 'Pages' },
       h('a', { href: '#/', html: `${icon('book')}<span>Home</span>` }),
+      h('a', { href: '#/courses', html: `${icon('list')}<span>Courses</span>` }),
       h('a', { href: '#/practice', html: `${icon('target')}<span>Practice</span>` }),
-      h('a', { href: '#/reference', html: `${icon('list')}<span>Reference</span>` }),
+      h('a', { href: '#/review', html: `${icon('sparkle')}<span>Review</span>` }),
+      h('a', { href: '#/reference', html: `${icon('code')}<span>Reference</span>` }),
       h('a', { href: '#/playground', html: `${icon('terminal')}<span>Playground</span>` }),
     );
 
-    const nav = h('nav', { class: 'sidebar-nav', 'aria-label': 'Lessons' });
-    for (const part of parts) {
+    const switcher = h(
+      'details',
+      { class: 'course-switcher' },
+      h(
+        'summary',
+        null,
+        h('span', { class: 'course-switcher-icon', html: icon(course.icon, 16) }),
+        h('span', { class: 'course-switcher-text' }, h('span', { class: 'course-switcher-label' }, 'Course'), h('span', { class: 'course-switcher-title' }, course.title)),
+      ),
+      h(
+        'ul',
+        { class: 'course-switcher-list' },
+        ...courses.map((c) =>
+          h(
+            'li',
+            null,
+            h('a', { href: courseHref(c.id), class: c.id === course.id ? 'is-current' : '', html: `${icon(c.icon, 15)}<span>${c.title}</span>` }),
+          ),
+        ),
+      ),
+    );
+
+    const nav = h('nav', { class: 'sidebar-nav', 'aria-label': `${course.title} lessons` });
+    for (const part of partsOf(course.id)) {
       const list = h('ol', { class: 'side-list' });
       for (const lesson of part.lessons) {
         const status = lessonStatus(lesson);
@@ -170,22 +228,33 @@ export function createShell(root: HTMLElement): Shell {
           ),
         );
       }
-      nav.append(h('section', { class: 'side-part' }, h('h2', { class: 'side-part-title' }, h('span', { class: 'side-part-num' }, String(part.index)), part.name), list));
+      const showPart = partsOf(course.id).length > 1;
+      nav.append(
+        h(
+          'section',
+          { class: 'side-part' },
+          showPart ? h('h2', { class: 'side-part-title' }, h('span', { class: 'side-part-num' }, String(part.index)), part.name) : null,
+          list,
+        ),
+      );
     }
 
     sidebar.replaceChildren(
       mobileNav,
-      h('div', { class: 'sidebar-progress' }, bar('Lessons completed', done, lessons.length), bar('Challenges solved', solved, challenges.length)),
+      switcher,
+      h(
+        'div',
+        { class: 'sidebar-progress' },
+        h('a', { class: 'sidebar-course-link', href: courseHref(course.id), html: `<span>Course overview</span>${icon('right', 14)}` }),
+        meter('Lessons completed', stats.completed, stats.lessons),
+        meter('Challenges solved', stats.solved, stats.challenges),
+      ),
       nav,
     );
     sidebar.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
   };
   renderSidebar();
-  progress.subscribe(() => {
-    renderSidebar();
-    navLinks.learn.href = continueLesson() ? lessonHref(continueLesson()!.slug) : '#/';
-  });
-  navLinks.learn.href = continueLesson() ? lessonHref(continueLesson()!.slug) : '#/';
+  progress.subscribe(renderSidebar);
 
   const overlay = h('div', { class: 'drawer-overlay', onclick: () => setDrawer(false) });
   const main = h('main', { class: 'main', id: 'main', tabindex: '-1' });
@@ -217,15 +286,19 @@ export function createShell(root: HTMLElement): Shell {
     setLayout(layout) {
       root.dataset.layout = layout;
     },
-    setActive(nav, lessonSlug = null) {
+    setActive(nav, focus = {}) {
       for (const [key, link] of Object.entries(navLinks)) {
         const active = key === nav;
         link.classList.toggle('is-active', active);
         if (active) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
       }
-      if (lessonSlug !== currentSlug) {
-        currentSlug = lessonSlug;
+      const lesson = focus.lesson ? lessonMeta(focus.lesson) : undefined;
+      const nextSlug = lesson?.slug ?? null;
+      const nextCourse = lesson?.course ?? focus.course ?? currentCourse;
+      if (nextSlug !== currentSlug || nextCourse !== currentCourse) {
+        currentSlug = nextSlug;
+        currentCourse = nextCourse;
         renderSidebar();
       }
     },

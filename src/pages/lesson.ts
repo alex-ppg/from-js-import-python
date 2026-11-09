@@ -1,9 +1,9 @@
 import { hydrate } from '../components/hydrate.ts';
 import { REPO_URL } from '../config.ts';
-import { lessonMeta, loadLesson, neighbours, partOf, type LessonMeta } from '../content.ts';
+import { courseMeta, lessonMeta, loadLesson, neighbours, partOf, partsOf, type LessonMeta } from '../content.ts';
 import { h, icon, plural, whenIdle } from '../lib/dom.ts';
 import { progress } from '../lib/progress.ts';
-import { lessonHref } from '../lib/router.ts';
+import { courseHref, lessonHref } from '../lib/router.ts';
 import { python } from '../python/client.ts';
 
 export interface LessonView {
@@ -41,6 +41,8 @@ export async function renderLesson(main: HTMLElement, slug: string, isCurrent: (
 
   progress.visit(slug);
   const part = partOf(meta);
+  const course = courseMeta(meta.course);
+  const multiPart = partsOf(meta.course).length > 1;
   const { prev, next } = neighbours(slug);
 
   // ---- header ----------------------------------------------------------------
@@ -53,7 +55,17 @@ export async function renderLesson(main: HTMLElement, slug: string, isCurrent: (
   const header = h(
     'header',
     { class: 'lesson-header' },
-    h('div', { class: 'lesson-kicker' }, h('span', null, `Part ${part?.index ?? ''} · ${meta.part}`), h('span', { class: 'lesson-number' }, `Lesson ${meta.order}`)),
+    h(
+      'div',
+      { class: 'lesson-kicker' },
+      h(
+        'span',
+        { class: 'lesson-kicker-path' },
+        course ? h('a', { href: courseHref(course.id) }, course.title) : null,
+        multiPart ? h('span', null, ` · Part ${part?.index ?? ''}: ${meta.part}`) : null,
+      ),
+      h('span', { class: 'lesson-number' }, `Lesson ${meta.order}`),
+    ),
     h('h1', { class: 'lesson-title' }, meta.title),
     h('p', { class: 'lesson-summary' }, meta.summary),
     h('div', { class: 'lesson-facts', html: facts.map((f) => `<span class="fact">${f}</span>`).join('') }),
@@ -69,14 +81,16 @@ export async function renderLesson(main: HTMLElement, slug: string, isCurrent: (
   const renderComplete = () => {
     const done = !!progress.lesson(slug).completed;
     const solved = meta.challenges.filter((c) => progress.challenge(c.id).solved).length;
+    const answers = Array.from({ length: meta.quizCount }, (_, i) => progress.quiz(`${slug}:${i}`)).filter((a) => a !== undefined);
+    const right = answers.filter((a) => a.correct).length;
     completeButton.className = `btn ${done ? 'btn-success' : 'btn-primary'}`;
     completeButton.innerHTML = done ? `${icon('check', 16)}<span>Completed</span>` : `${icon('check', 16)}<span>Mark lesson as complete</span>`;
     completeButton.setAttribute('aria-pressed', String(done));
-    completeNote.textContent = meta.challenges.length
-      ? `${solved} of ${plural(meta.challenges.length, 'challenge')} solved${done ? '. Click the button again to mark as not done.' : '.'}`
-      : done
-        ? 'Click again to mark as not done.'
-        : '';
+    const facts = [
+      meta.challenges.length ? `${solved} of ${plural(meta.challenges.length, 'challenge')} solved` : '',
+      meta.quizCount ? `${right} of ${plural(meta.quizCount, 'quiz', 'quizzes')} answered correctly` : '',
+    ].filter(Boolean);
+    completeNote.textContent = [facts.length ? `${facts.join(' · ')}.` : '', done ? 'Click the button again to mark as not done.' : ''].filter(Boolean).join(' ');
   };
   completeButton.addEventListener('click', () => progress.setCompleted(slug, !progress.lesson(slug).completed));
   renderComplete();
@@ -97,7 +111,7 @@ export async function renderLesson(main: HTMLElement, slug: string, isCurrent: (
     { class: 'lesson-footer' },
     h('div', { class: 'complete-card' }, h('div', null, h('h2', { class: 'complete-title' }, 'Finished this lesson?'), completeNote), completeButton),
     h('nav', { class: 'pager', 'aria-label': 'Lesson navigation' }, pagerLink(prev, 'prev'), pagerLink(next, 'next')),
-    h('p', { class: 'lesson-edit' }, h('a', { href: `${REPO_URL}/blob/main/content/lessons/${meta.fileName}`, target: '_blank', rel: 'noopener noreferrer', html: `${icon('code', 14)}<span>Suggest an edit on GitHub</span>` })),
+    h('p', { class: 'lesson-edit' }, h('a', { href: `${REPO_URL}/blob/main/content/courses/${meta.course}/${meta.fileName}`, target: '_blank', rel: 'noopener noreferrer', html: `${icon('code', 14)}<span>Suggest an edit on GitHub</span>` })),
   );
 
   const article = h('article', { class: 'lesson' }, header, content, footer);

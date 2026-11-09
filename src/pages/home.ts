@@ -1,7 +1,8 @@
+import { courseCard } from '../components/cards.ts';
 import { hydrate } from '../components/hydrate.ts';
 import { REPO_URL } from '../config.ts';
-import { challenges, lessons, parts, type CompiledBody } from '../content.ts';
-import { brandMarkup, continueLesson, lessonStatus, solvedCount } from '../layout/shell.ts';
+import { challenges, coreCourse, courses, lessons, quizTotal, type CompiledBody } from '../content.ts';
+import { brandMarkup, continueLesson, lessonStatus } from '../layout/shell.ts';
 import { h, icon, plural } from '../lib/dom.ts';
 import { progress } from '../lib/progress.ts';
 import { lessonHref } from '../lib/router.ts';
@@ -9,7 +10,10 @@ import { lessonHref } from '../lib/router.ts';
 export function renderHome(main: HTMLElement): () => void {
   const cleanups: Array<() => void> = [];
 
-  const startHref = () => (continueLesson() ? lessonHref(continueLesson()!.slug) : '#/');
+  const startHref = () => {
+    const next = continueLesson();
+    return next ? lessonHref(next.slug) : '#/courses';
+  };
   const started = () => lessons.some((l) => lessonStatus(l) !== 'new');
 
   const startButton = h('a', { class: 'btn btn-primary btn-lg', href: startHref() });
@@ -40,15 +44,22 @@ export function renderHome(main: HTMLElement): () => void {
       h(
         'p',
         { class: 'hero-lede' },
-        'You already know how to program. This course maps the JavaScript in your head onto idiomatic Python: side-by-side translations, the traps your JS instincts walk into, and the syntax shortcuts that make Python a joy.',
+        'You already know how to program. These courses map the JavaScript in your head onto idiomatic Python: side-by-side translations, the traps your JS instincts walk into, and the syntax shortcuts that make Python a joy. Then they take you further, into real-world tooling, deep internals, algorithms and guided projects.',
       ),
-      h('div', { class: 'hero-actions' }, startButton, h('a', { class: 'btn btn-lg', href: '#/reference', html: `${icon('list', 18)}<span>JS → Python reference</span>` })),
+      h(
+        'div',
+        { class: 'hero-actions' },
+        startButton,
+        h('a', { class: 'btn btn-lg', href: '#/courses', html: `${icon('list', 18)}<span>Browse courses</span>` }),
+      ),
       h(
         'ul',
         { class: 'hero-facts' },
+        h('li', null, h('strong', null, String(courses.length)), ' courses'),
         h('li', null, h('strong', null, String(lessons.length)), ' lessons'),
         h('li', null, h('strong', null, String(challenges.length)), ' coding challenges'),
-        h('li', null, h('strong', null, 'Python 3.14'), ' running in your browser'),
+        h('li', null, h('strong', null, String(quizTotal)), ' quizzes'),
+        h('li', null, h('strong', null, 'Python 3.14'), ' in your browser'),
       ),
     ),
   );
@@ -67,60 +78,37 @@ export function renderHome(main: HTMLElement): () => void {
       ['code', 'Translations, not tutorials', 'Each lesson starts from the JS you know: `map`/`reduce`, `i++`, arrow functions, `?.`, classes, promises. Then it shows the Python a reviewer would approve.'],
       ['terminal', 'Real Python, zero setup', 'Snippets and challenges run on CPython 3.14 compiled to WebAssembly (Pyodide), inside a web worker. Nothing to install, and your code never leaves the browser.'],
       ['target', 'Challenges that check your work', 'Tests run against your solution and also check idioms: "use a comprehension", "no index loops". Hints are revealed one at a time, and the solution is there when you need it.'],
+      ['sparkle', 'Review that sticks', 'The quiz review resurfaces questions you missed, and the flashcards drill the JS → Python reference with spaced repetition. Progress is saved in your browser.'],
     ].map(([iconName, title, text]) =>
       h('article', { class: 'feature' }, h('div', { class: 'feature-icon', html: icon(iconName!, 22) }), h('h3', null, title), h('p', { html: text!.replace(/`([^`]+)`/g, '<code>$1</code>') })),
     ),
   );
 
-  const curriculum = h('section', { class: 'curriculum' });
-  const renderCurriculum = () => {
+  const courseSection = h('section', { class: 'curriculum' });
+  const renderCourses = () => {
     const done = lessons.filter((l) => progress.lesson(l.slug).completed).length;
     const solved = challenges.filter((c) => progress.challenge(c.id).solved).length;
-    curriculum.replaceChildren(
+    courseSection.replaceChildren(
       h(
         'div',
         { class: 'section-head' },
-        h('h2', null, 'The curriculum'),
-        h('p', null, `${plural(lessons.length, 'lesson')} in ${plural(parts.length, 'part')}. Your progress is saved in this browser: ${done} of ${lessons.length} lessons completed, ${solved} of ${challenges.length} challenges solved.`),
-      ),
-      ...parts.map((part) =>
+        h('h2', null, 'Courses'),
         h(
-          'div',
-          { class: 'part' },
-          h('h3', { class: 'part-title' }, h('span', { class: 'part-num' }, `Part ${part.index}`), part.name),
-          h(
-            'div',
-            { class: 'lesson-grid' },
-            ...part.lessons.map((lesson) => {
-              const status = lessonStatus(lesson);
-              const solvedHere = solvedCount(lesson);
-              return h(
-                'a',
-                { class: `lesson-card status-${status}`, href: lessonHref(lesson.slug) },
-                h('span', { class: 'lesson-card-num' }, String(lesson.order).padStart(2, '0')),
-                h('span', { class: 'lesson-card-title' }, lesson.title),
-                h('span', { class: 'lesson-card-summary' }, lesson.summary),
-                h(
-                  'span',
-                  { class: 'lesson-card-meta' },
-                  h('span', { html: `${icon('clock', 13)} ${lesson.minutes} min` }),
-                  lesson.challenges.length ? h('span', { html: `${icon('target', 13)} ${solvedHere}/${lesson.challenges.length}` }) : null,
-                  status === 'done' ? h('span', { class: 'lesson-card-done', html: `${icon('check', 13)} Done` }) : status === 'started' ? h('span', { class: 'lesson-card-started' }, 'In progress') : null,
-                ),
-              );
-            }),
-          ),
+          'p',
+          null,
+          `Start with ${coreCourse ? `“${coreCourse.title}”` : 'the core course'}, then pick a direction. Progress is saved in this browser: ${done} of ${plural(lessons.length, 'lesson')} completed, ${solved} of ${challenges.length} challenges solved.`,
         ),
       ),
+      h('div', { class: 'course-grid' }, ...courses.map(courseCard)),
     );
   };
-  renderCurriculum();
+  renderCourses();
 
   const resetButton = h('button', {
     type: 'button',
     class: 'link-btn',
     onclick: () => {
-      if (window.confirm('Reset all progress, saved solutions and quiz answers in this browser?')) progress.reset();
+      if (window.confirm('Reset all progress, saved solutions, quiz answers and flashcards in this browser?')) progress.reset();
     },
   }, 'Reset progress');
 
@@ -134,12 +122,12 @@ export function renderHome(main: HTMLElement): () => void {
     resetButton,
   );
 
-  main.replaceChildren(h('div', { class: 'home' }, hero, demoSection, features, curriculum, footer));
+  main.replaceChildren(h('div', { class: 'home' }, hero, demoSection, features, courseSection, footer));
 
   cleanups.push(
     progress.subscribe(() => {
       renderStart();
-      renderCurriculum();
+      renderCourses();
     }),
   );
   return () => cleanups.forEach((cleanup) => cleanup());

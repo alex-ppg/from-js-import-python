@@ -6,19 +6,23 @@ import './styles/layout.css';
 import './styles/prose.css';
 import './styles/components.css';
 import './styles/pages.css';
+import './styles/courses.css';
 
 import { initPalette } from './components/palette.ts';
 import { SITE_NAME } from './config.ts';
-import { lessonMeta } from './content.ts';
+import { courseMeta, lessonMeta } from './content.ts';
 import { createShell } from './layout/shell.ts';
 import { copyText, h, icon } from './lib/dom.ts';
 import { currentRoute, type Route } from './lib/router.ts';
 import { initTheme } from './lib/theme.ts';
+import { renderCourse } from './pages/course.ts';
+import { renderCourses } from './pages/courses.ts';
 import { renderHome } from './pages/home.ts';
 import { renderLesson, type LessonView } from './pages/lesson.ts';
 import { renderPlaygroundPage } from './pages/playground.ts';
 import { renderPractice } from './pages/practice.ts';
 import { renderReference, type ReferenceView } from './pages/reference.ts';
+import { renderReview, reviewTitle } from './pages/review.ts';
 
 initTheme();
 const shell = createShell(document.getElementById('app')!);
@@ -71,6 +75,34 @@ async function render(route: Route): Promise<void> {
       view = { kind: 'other', cleanup: renderHome(main) };
       window.scrollTo({ top: 0 });
       break;
+    case 'courses':
+      shell.setLayout('wide');
+      shell.setActive('courses');
+      document.title = `Courses · ${SITE_NAME}`;
+      view = { kind: 'other', cleanup: renderCourses(main) };
+      window.scrollTo({ top: 0 });
+      break;
+    case 'course': {
+      const course = courseMeta(route.id);
+      shell.setLayout('wide');
+      shell.setActive('courses', { course: route.id });
+      window.scrollTo({ top: 0 });
+      const cleanup = course ? renderCourse(main, route.id) : null;
+      if (!cleanup) {
+        view = notFound(main);
+        break;
+      }
+      document.title = `${course!.title} · ${SITE_NAME}`;
+      view = { kind: 'other', cleanup };
+      break;
+    }
+    case 'review':
+      shell.setLayout('wide');
+      shell.setActive('review');
+      document.title = `${reviewTitle(route.mode)} · ${SITE_NAME}`;
+      view = { kind: 'other', cleanup: renderReview(main, route.mode) };
+      window.scrollTo({ top: 0 });
+      break;
     case 'lesson': {
       const meta = lessonMeta(route.slug);
       if (!meta) {
@@ -80,7 +112,7 @@ async function render(route: Route): Promise<void> {
         break;
       }
       shell.setLayout('docs');
-      shell.setActive('learn', route.slug);
+      shell.setActive('courses', { lesson: route.slug });
       document.title = `${meta.title} · ${SITE_NAME}`;
       window.scrollTo({ top: 0 });
       const lesson = await renderLesson(main, route.slug, isCurrent);

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   check:
-    name: Type-check, validate content, build
+    name: Type-check, test, validate content, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Platform unit tests: parser, router, renderer and the Python harness.
+      - run: npm test
       # Executes every playground, quiz and challenge with the real Pyodide runtime.
       - run: npm run validate
       - run: npm run build

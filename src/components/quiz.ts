@@ -10,7 +10,13 @@ import { createRunControls, pendingStatus } from './run-button.ts';
 
 const LETTERS = 'ABCDEFGH';
 
-export function mountQuiz(host: HTMLElement, data: QuizData, key: string): () => void {
+export interface QuizOptions {
+  /** Ignore any saved answer (review mode asks again). */
+  fresh?: boolean;
+  onAnswer?: (correct: boolean) => void;
+}
+
+export function mountQuiz(host: HTMLElement, data: QuizData, key: string, opts: QuizOptions = {}): () => void {
   const options = h('div', { class: 'quiz-options', role: 'group', 'aria-label': 'Answers' });
   const feedback = h('div', { class: 'quiz-feedback', hidden: true, 'aria-live': 'polite' });
   const buttons: HTMLButtonElement[] = [];
@@ -39,6 +45,7 @@ export function mountQuiz(host: HTMLElement, data: QuizData, key: string): () =>
       onclick: () => {
         progress.answerQuiz(key, i, i === data.correct);
         reveal(i, true);
+        opts.onAnswer?.(i === data.correct);
       },
     });
     buttons.push(button);
@@ -85,7 +92,8 @@ export function mountQuiz(host: HTMLElement, data: QuizData, key: string): () =>
   host.append(options, feedback, h('div', { class: 'quiz-footer' }, reset), ...(runRow ? [runRow] : []));
   host.addEventListener('animationend', () => host.classList.remove('shake'));
 
-  const saved = progress.quiz(key);
+  const saved = opts.fresh ? undefined : progress.quiz(key);
   if (saved && saved.choice < buttons.length) reveal(saved.choice, false);
+  if (opts.fresh) reset.remove();
   return () => {};
 }

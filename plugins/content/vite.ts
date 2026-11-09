@@ -1,32 +1,47 @@
-// Vite plugin: compiles content/lessons/*.md and content/reference.md into
-// JS modules, and serves `virtual:lessons` (metadata for every lesson plus a
-// lazy loader per lesson, so each lesson becomes its own chunk).
+// Vite plugin: compiles content/courses/<course>/*.md lessons and
+// content/*.md pages into JS modules, and serves `virtual:lessons`: every
+// course and lesson's metadata plus a lazy loader per lesson (so each lesson
+// is its own chunk).
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { normalizePath, type Plugin } from 'vite';
+import { COURSES_DIR, courseIdOf, LESSON_FILE, listCourses, type CourseConfig } from './courses.ts';
 import { parseLesson, parseReference } from './parse.ts';
 import { createRenderer, type Renderer } from './render.ts';
-import type { CompiledLesson, LessonMeta } from './types.ts';
+import type { CompiledLesson, CourseMeta, LessonMeta } from './types.ts';
 
 const VIRTUAL_ID = 'virtual:lessons';
 const RESOLVED_ID = '\0' + VIRTUAL_ID;
-const LESSON_FILE = /^\d+-[a-z0-9-]+\.md$/;
 
 export function contentPlugin(): Plugin {
   let root = process.cwd();
   let isBuild = false;
   let renderer: Promise<Renderer> | undefined;
-  const cache = new Map<string, { src: string; compiled: CompiledLesson }>();
+  const cache = new Map<string, { src: string; course: string; compiled: CompiledLesson }>();
+  let courseConfigs = new Map<string, CourseConfig>();
 
   const getRenderer = () => (renderer ??= createRenderer());
-  const lessonsDir = () => normalizePath(resolve(root, 'content/lessons'));
+  const coursesDir = () => normalizePath(resolve(root, COURSES_DIR));
+
+  const courseFor = (file: string): CourseConfig => {
+    const id = courseIdOf(file);
+    let course = id ? courseConfigs.get(id) : undefined;
+    if (!course) {
+      courseConfigs = new Map(listCourses(root).map((c) => [c.id, c]));
+      course = id ? courseConfigs.get(id) : undefined;
+    }
+    if (!course) throw new Error(`${file}: lessons must live in ${COURSES_DIR}/<course>/ next to a course.json`);
+    return course;
+  };
 
   async function compileLesson(file: string, src = readFileSync(file, 'utf8')): Promise<CompiledLesson> {
+    const course = courseFor(file);
+    const key = JSON.stringify(course);
     const hit = cache.get(file);
-    if (hit && hit.src === src) return hit.compiled;
-    const compiled = (await getRenderer()).renderLesson(parseLesson(src, file));
-    cache.set(file, { src, compiled });
+    if (hit && hit.src === src && hit.course === key) return hit.compiled;
+    const compiled = (await getRenderer()).renderLesson(parseLesson(src, file), course);
+    cache.set(file, { src, course: key, compiled });
     return compiled;
   }
 
@@ -40,11 +55,13 @@ export function contentPlugin(): Plugin {
     },
 
     configureServer(server) {
-      // Edits to existing lessons are tracked via addWatchFile below; adding or
-      // removing a lesson file changes the manifest itself.
+      // Edits to existing lessons and course.json files are tracked with
+      // addWatchFile below; adding or removing a lesson changes the manifest.
       const onAddOrRemove = (file: string) => {
         const path = normalizePath(file);
-        if (!path.startsWith(`${lessonsDir()}/`) || !LESSON_FILE.test(path.split('/').pop()!)) return;
+        const name = path.split('/').pop()!;
+        if (!path.startsWith(`${coursesDir()}/`) || !(LESSON_FILE.test(name) || name === 'course.json')) return;
+        courseConfigs = new Map();
         const mod = server.moduleGraph.getModuleById(RESOLVED_ID);
         if (mod) server.moduleGraph.invalidateModule(mod);
         server.ws.send({ type: 'full-reload' });
@@ -59,23 +76,37 @@ export function contentPlugin(): Plugin {
 
     async load(id) {
       if (id !== RESOLVED_ID) return undefined;
-      const dir = lessonsDir();
-      const metas: LessonMeta[] = [];
+      const courses = listCourses(root);
+      courseConfigs = new Map(courses.map((c) => [c.id, c]));
+      const courseMetas: CourseMeta[] = [];
+      const lessonMetas: LessonMeta[] = [];
       const loaders: string[] = [];
-      for (const name of readdirSync(dir).filter((f) => LESSON_FILE.test(f)).sort()) {
-        const file = `${dir}/${name}`;
-        this.addWatchFile(file);
-        try {
-          const { meta } = await compileLesson(file);
-          metas.push(meta);
-          loaders.push(`  ${JSON.stringify(meta.slug)}: () => import(${JSON.stringify(`/content/lessons/${name}`)})`);
-        } catch (error) {
-          // During `vite dev` a broken lesson shouldn't take the whole site down.
-          if (isBuild) throw error;
-          this.warn(`skipping ${name}: ${(error as Error).message}`);
+      for (const course of courses) {
+        this.addWatchFile(normalizePath(resolve(course.dir, 'course.json')));
+        const slugs: string[] = [];
+        for (const name of course.lessonFiles) {
+          const file = normalizePath(resolve(course.dir, name));
+          this.addWatchFile(file);
+          try {
+            const { meta } = await compileLesson(file);
+            slugs.push(meta.slug);
+            lessonMetas.push(meta);
+            loaders.push(`  ${JSON.stringify(meta.slug)}: () => import(${JSON.stringify(`/${COURSES_DIR}/${course.id}/${name}`)})`);
+          } catch (error) {
+            // During `vite dev` a broken lesson shouldn't take the whole site down.
+            if (isBuild) throw error;
+            this.warn(`skipping ${course.id}/${name}: ${(error as Error).message}`);
+          }
         }
+        const { dir: _dir, lessonFiles: _files, ...config } = course;
+        courseMetas.push({ ...config, lessons: slugs });
       }
-      return `export const lessons = ${JSON.stringify(metas)};\nexport const loaders = {\n${loaders.join(',\n')}\n};\n`;
+      return [
+        `export const courses = ${JSON.stringify(courseMetas)};`,
+        `export const lessons = ${JSON.stringify(lessonMetas)};`,
+        `export const loaders = {\n${loaders.join(',\n')}\n};`,
+        '',
+      ].join('\n');
     },
 
     async transform(src, id) {
@@ -85,7 +116,7 @@ export function contentPlugin(): Plugin {
         const compiled = (await getRenderer()).renderReference(parseReference(src, path));
         return { code: `export default ${JSON.stringify(compiled)};`, map: null };
       }
-      if (path.startsWith(`${lessonsDir()}/`)) {
+      if (path.startsWith(`${coursesDir()}/`)) {
         const compiled = await compileLesson(path, src);
         return { code: `export default ${JSON.stringify(compiled)};`, map: null };
       }

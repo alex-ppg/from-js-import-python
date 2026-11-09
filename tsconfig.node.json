@@ -3,7 +3,7 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "types": ["node"],
     "strict": true,
     "noEmit": true,
@@ -16,5 +16,5 @@
     "noUnusedParameters": true,
     "resolveJsonModule": true
   },
-  "include": ["plugins", "scripts", "vite.config.ts"]
+  "include": ["plugins", "scripts", "tests", "vite.config.ts"]
 }

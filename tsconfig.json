@@ -18,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true
   },
-  "include": ["src", "plugins/content/types.ts", "plugins/content/parts.ts"]
+  "include": ["src", "plugins/content/types.ts"]
 }

@@ -1,0 +1,8 @@
+{
+  "title": "Guided Projects",
+  "summary": "Build real things step by step: an expression calculator, a Markdown converter, a todo CLI, an event-sourced ledger, a test runner, an async crawler and more.",
+  "level": "Build",
+  "icon": "flask",
+  "order": 6,
+  "parts": ["Interpreters & Text", "Apps & Data", "Systems"]
+}
