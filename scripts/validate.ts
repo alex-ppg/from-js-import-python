@@ -63,10 +63,30 @@ const lessonPaths = courses.flatMap((course) => course.lessonFiles.map((name) =>
 const courseOf = new Map<string, CourseOnDisk>(
   courses.flatMap((course) => course.lessonFiles.map((name) => [`${COURSES_DIR}/${course.id}/${name}`, course] as const)),
 );
+// Invisible or combining characters are almost always accidents (a tool
+// turning "﻿" into a real BOM, say) and are invisible on review. In code,
+// write them as escapes.
+const SUSPICIOUS = /[﻿​-‍⁠ ̀-ͯ]/g;
+const EMOJI_BEFORE = /\p{Extended_Pictographic}\p{Emoji_Modifier}?$/u;
+const EMOJI_AFTER = /^\p{Extended_Pictographic}/u;
+function checkCharacters(file: string, source: string): void {
+  source.split(/\r?\n/).forEach((text, i) => {
+    for (const m of text.matchAll(SUSPICIOUS)) {
+      const at = m.index!;
+      // A zero-width joiner between two emoji is part of one emoji (👨‍👩‍👧).
+      if (m[0] === '‍' && EMOJI_BEFORE.test(text.slice(0, at)) && EMOJI_AFTER.test(text.slice(at + 1))) continue;
+      const code = m[0].codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
+      warn(file, i + 1, `invisible or combining character U+${code} at column ${m.index! + 1}; write it as an escape (e.g. "\\u${code}") if it's intended`);
+    }
+  });
+}
+
 const parsed: ParsedLesson[] = [];
 for (const path of lessonPaths) {
   try {
-    parsed.push(parseLesson(readFileSync(resolve(ROOT, path), 'utf8'), path));
+    const source = readFileSync(resolve(ROOT, path), 'utf8');
+    checkCharacters(path, source);
+    parsed.push(parseLesson(source, path));
   } catch (e) {
     if (e instanceof ContentError) error(e.file, e.line, e.message.replace(`${e.file}:${e.line}: `, ''));
     else throw e;
@@ -125,6 +145,7 @@ const wantsReference = !filters.length || filters.some((f) => 'reference'.includ
 if (wantsReference && existsSync(REFERENCE_FILE)) {
   try {
     const source = readFileSync(REFERENCE_FILE, 'utf8');
+    checkCharacters('content/reference.md', source);
     for (const link of scanLessonLinks(source.replace(/\r\n?/g, '\n'), 1)) {
       const target = bySlug.get(link.slug);
       if (!target) warn('content/reference.md', link.line, `link to unknown lesson "lesson:${link.slug}"`);
@@ -203,6 +224,7 @@ async function main() {
     const pyodide = await loadPyodide();
     pyodide.setStdout({ write: (buf: Uint8Array) => ((stdout += decoder.decode(buf)), buf.length) });
     pyodide.setStderr({ write: (buf: Uint8Array) => ((stderr += decoder.decode(buf)), buf.length) });
+    pyodide.setStdin({ error: true }); // as in the browser worker
     pyodide.setInterruptBuffer(interrupt);
     pyodide.FS.mkdirTree('/fjip');
     pyodide.FS.writeFile('/fjip/fjip_runtime.py', runtimeSource);

@@ -3,7 +3,7 @@
 
 import { version as PYODIDE_VERSION } from 'pyodide/package.json';
 import runtimeSource from './runtime.py?raw';
-import type { RunRequest, RunResult, WorkerMessage } from './types.ts';
+import type { RunRequest, RunResult, TestEvent, WorkerMessage } from './types.ts';
 
 const INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const OUTPUT_CAP = 200_000;
@@ -33,6 +33,8 @@ interface PackageOptions {
 interface Harness {
   run_json(code: string, tests: string | null, showLast: boolean): Promise<string>;
   missing_imports_json(code: string): string;
+  set_test_reporter(reporter: (json: string) => void): void;
+  set_interrupt_aborts(aborts: boolean): void;
 }
 
 const post = (message: WorkerMessage) => self.postMessage(message);
@@ -107,6 +109,10 @@ const ready = (async () => {
   pyodide.FS.writeFile('/fjip/fjip_runtime.py', runtimeSource);
   pyodide.runPython("import sys\nsys.path.insert(0, '/fjip')");
   harness = pyodide.pyimport('fjip_runtime') as Harness;
+  // Stream per-test progress so a timeout still shows the finished tests.
+  harness.set_test_reporter((json: string) => post({ type: 'test', id: currentId, event: JSON.parse(json) as TestEvent }));
+  // No interrupt buffer here: any KeyboardInterrupt is the learner's own.
+  harness.set_interrupt_aborts(false);
   const python = String(pyodide.runPython("import sys\nsys.version.split()[0]"));
   post({ type: 'status', status: 'ready', python, pyodide: pyodide.version });
 })();

@@ -48,6 +48,9 @@ export function mountChallenge(host: HTMLElement, data: ChallengeData, context: 
   let solved = !!saved.solved;
   let hintsShown = Math.min(saved.hints ?? 0, data.hintsHtml.length);
   let saveTimer: number | undefined;
+  // Test results streamed during the current run, and the test in progress.
+  let streamed: TestResult[] = [];
+  let runningTest: string | null = null;
 
   // ---- header & description -------------------------------------------
   const solvedBadge = h('span', { class: 'ch-solved', html: `${icon('check', 14)}<span>Solved</span>` });
@@ -161,11 +164,23 @@ export function mountChallenge(host: HTMLElement, data: ChallengeData, context: 
     summary.textContent = withTests ? 'Running tests…' : 'Running…';
     controls.setRunning(true);
     controls.setStatus(pendingStatus(), 'busy');
+    streamed = [];
+    runningTest = null;
 
     const outcome = await python.run({
       code: editor.getValue(),
       tests: withTests ? data.tests : null,
       onStart: () => controls.setStatus('Running…', 'busy'),
+      onTest: (event) => {
+        if (event.event === 'start') {
+          runningTest = event.name;
+          summary.textContent = `Running “${event.name}”…`;
+          return;
+        }
+        runningTest = null;
+        streamed.push(event.result);
+        testList.append(renderTest(event.result));
+      },
       onStdout: (text) => {
         consoleSection.hidden = false;
         consoleView.write(text, 'out');
@@ -202,10 +217,14 @@ export function mountChallenge(host: HTMLElement, data: ChallengeData, context: 
       consoleSection.hidden = false;
       consoleView.finish(outcome, { quietValue: true });
       summary.className = 'ch-summary is-fail';
+      // Tests stream in as they finish, so a timeout can say where it hung.
+      const done = streamed.length ? ` ${streamed.filter((t) => t.passed).length} of ${plural(streamed.length, 'finished test')} passed first.` : '';
       const why = outcome.timedOut
-        ? 'Your code took longer than 10 seconds. Is there an infinite loop?'
+        ? runningTest
+          ? `The test <strong>“${escapeHtml(runningTest)}”</strong> was still running after 10 seconds: an infinite loop, or an algorithm that's too slow for its input?${done}`
+          : 'Your code took longer than 10 seconds. Is there an infinite loop?'
         : outcome.stopped
-          ? 'Stopped.'
+          ? `Stopped.${done}`
           : `Your code raised <code>${escapeHtml(outcome.error!.type)}</code> before the tests could run.`;
       summary.innerHTML = `${icon('x', 16)}<span>${why}</span>`;
       return;

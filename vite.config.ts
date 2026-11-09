@@ -9,8 +9,9 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
-    // The reference chunk is ~1 MB of pre-highlighted HTML but only ~90 kB
-    // gzipped (Shiki's inline styles compress extremely well).
-    chunkSizeWarningLimit: 1100,
+    // The reference chunk is ~1.7 MB of pre-highlighted HTML (410 entries) but
+    // ~170 kB gzipped, since Shiki's inline styles compress extremely well. It
+    // loads only for the reference, flashcards and search.
+    chunkSizeWarningLimit: 2000,
   },
 });

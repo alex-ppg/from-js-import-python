@@ -30,6 +30,8 @@ export interface RunResult {
   durationMs: number;
 }
 
+export type TestEvent = { event: 'start'; name: string } | { event: 'done'; result: TestResult };
+
 export interface RunRequest {
   type: 'run';
   id: number;
@@ -45,5 +47,7 @@ export type WorkerMessage =
   | { type: 'started'; id: number }
   | { type: 'stdout' | 'stderr' | 'info'; id: number; text: string }
   | { type: 'done'; id: number; result: RunResult }
+  /** Streamed while challenge tests run (before `done`). */
+  | { type: 'test'; id: number; event: TestEvent }
   /** The interpreter is unusable (e.g. wasm stack overflow); respawn the worker. */
   | { type: 'fatal' };

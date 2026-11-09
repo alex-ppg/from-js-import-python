@@ -12,6 +12,8 @@ interface Harness {
   run_json(code: string, tests: string | null, showLast: boolean): Promise<string>;
   check_syntax_json(code: string): string;
   missing_imports_json(code: string): string;
+  set_test_reporter(reporter: ((json: string) => void) | null): void;
+  set_interrupt_aborts(aborts: boolean): void;
 }
 
 interface Result {
@@ -125,6 +127,20 @@ describe('the challenge test API', () => {
     assert.equal(r.tests![3]!.message, 'sort it');
   });
 
+  test('syntax and call checks can be scoped to one function with within=', async () => {
+    const code = 'def old(xs):\n    return [x for x in xs]\n\ndef new(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n';
+    const tests = [
+      '@test\ndef module_wide():\n    requires_syntax(ast.ListComp, "comprehension")',
+      '@test\ndef scoped():\n    requires_syntax(ast.ListComp, "use a comprehension in new()", within="new")',
+      '@test\ndef scoped_call():\n    forbids_call("append", within="new")',
+      '@test\ndef missing():\n    requires_syntax(ast.For, "x", within="nope")',
+    ].join('\n\n');
+    const r = await run(code, tests);
+    assert.deepEqual(r.tests!.map((t) => t.passed), [true, false, false, false]);
+    assert.equal(r.tests![1]!.message, 'use a comprehension in new()');
+    assert.match(r.tests![3]!.message!, /couldn't find a function or class named 'nope'/);
+  });
+
   test('raises, output_of and stdout', async () => {
     const code = 'def boom():\n    raise ValueError("no")\ndef greet():\n    print("hey")\nprint("module output")\n';
     const tests = [
@@ -157,6 +173,34 @@ describe('the challenge test API', () => {
     // (Careful: "this is not python" is valid Python, an `is not` comparison.)
     const broken = await run('x = 1', 'def (:\n');
     assert.equal(broken.testsError?.type, 'SyntaxError');
+  });
+
+  test('streams a start/done event per test to the reporter', async () => {
+    const events: Array<{ event: string; name?: string; result?: { name: string; passed: boolean } }> = [];
+    harness.set_test_reporter((json) => events.push(JSON.parse(json)));
+    try {
+      await run('x = 1', '@test\ndef first():\n    eq(x, 1)\n\n@test\ndef second():\n    eq(x, 2)');
+    } finally {
+      harness.set_test_reporter(null);
+    }
+    assert.deepEqual(
+      events.map((e) => [e.event, e.name ?? e.result?.name, e.result?.passed]),
+      [['start', 'first', undefined], ['done', 'first', true], ['start', 'second', undefined], ['done', 'second', false]],
+    );
+  });
+
+  test("a learner's own KeyboardInterrupt fails one test in the browser but aborts in the validator", async () => {
+    const code = 'def main():\n    raise KeyboardInterrupt';
+    const tests = '@test\ndef ctrl_c():\n    main()\n\n@test\ndef after():\n    pass';
+    harness.set_interrupt_aborts(false);
+    try {
+      const browser = await run(code, tests);
+      assert.deepEqual(browser.tests!.map((t) => [t.name, t.passed]), [['ctrl_c', false], ['after', true]]);
+    } finally {
+      harness.set_interrupt_aborts(true);
+    }
+    const validator = await run(code, tests);
+    assert.equal(validator.error?.type, 'KeyboardInterrupt');
   });
 
   test('printing inside tests is captured per test, not streamed', async () => {

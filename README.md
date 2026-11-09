@@ -6,15 +6,17 @@ Interactive courses that map the JavaScript in your head onto idiomatic Python: 
 
 ## Courses
 
-| Course | What it covers |
-| --- | --- |
-| **Python for JavaScript Developers** (start here) | 25 lessons: syntax, numbers, strings, truthiness, loops, lists, comprehensions, dicts, sets, functions and lambdas, decorators, generators, classes, dunder methods, dataclasses, exceptions, context managers, modules and tooling, `asyncio`, type hints, pattern matching, the standard library, and a gotchas field guide. |
-| **Python in Practice** | Files and paths, regex and text processing, CSV/JSON/TOML, dates and times, data wrangling, CLIs with argparse, logging and debugging, testing (unittest, pytest, mocks), code quality, performance, HTTP APIs and SQLite. |
-| **Advanced Python** | Attribute lookup, descriptors, metaclasses, functional programming, generators and coroutines in depth, advanced typing, introspection and `ast`, Pythonic API design, CPython internals, and concurrency models. |
-| **Algorithms & Interview Prep** | The algorithm toolkit, two pointers and sliding windows, hashing, sorting and binary search, stacks/queues/heaps, linked lists and trees, graphs, backtracking and dynamic programming. Challenge-heavy. |
-| **JS → Python Drills** | Short translation reps: read a JS snippet, write the idiomatic Python, from strings and arrays to classes, async and "make it Pythonic" refactors. |
-| **Guided Projects** | Step-by-step builds where every step is a tested challenge: an expression calculator, a Markdown converter, a todo CLI, an event-sourced ledger, a text adventure, a test runner, an async crawler, and caches/rate limiters. |
-| **Checkpoints** | One exam per part of the core course: quizzes proven against real output, plus integrative challenges. |
+There are **7 courses**: 76 lessons, **340 coding challenges**, **410 quizzes** and 1,700+ code snippets, plus a 410-entry reference. Every one is validated against real Python 3.14.
+
+| Course | Lessons | Challenges | What it covers |
+| --- | ---: | ---: | --- |
+| **Python for JavaScript Developers** (start here) | 25 | 80 | Syntax, numbers, strings, truthiness, loops, lists, comprehensions, dicts, sets, functions and lambdas, decorators, generators, classes, dunder methods, dataclasses, exceptions, context managers, modules and tooling, `asyncio`, type hints, pattern matching, the standard library, and a gotchas field guide. |
+| **Python in Practice** | 12 | 44 | Files and paths, regex and text processing, CSV/JSON/TOML, dates and times, data wrangling, CLIs with argparse, logging and debugging, testing (unittest, pytest, mocks), code quality, performance, HTTP APIs, and SQLite. |
+| **Advanced Python** | 10 | 38 | Attribute lookup, descriptors, metaclasses, functional programming, generators and coroutines in depth, advanced typing, introspection and `ast`, Pythonic API design, CPython internals, and concurrency models. |
+| **Algorithms & Interview Prep** | 9 | 44 | The algorithm toolkit, two pointers and sliding windows, hashing, sorting and binary search, stacks/queues/heaps, linked lists and trees, graphs, backtracking, and dynamic programming. Speed is tested with large inputs. |
+| **JS → Python Drills** | 6 | 60 | Short translation reps: read a JS snippet, write the idiomatic Python. They run from strings and arrays to classes, async, and "make it Pythonic" refactors. |
+| **Guided Projects** | 8 | 48 | Six-step builds where every step is a tested challenge: an expression calculator, a Markdown converter, a todo CLI, an event-sourced ledger, a text adventure, a test runner, an async crawler, and caches and rate limiters. |
+| **Checkpoints** | 6 | 26 | One exam per part of the core course: 114 quizzes proven against real output, plus integrative challenges. |
 
 ## Features
 

@@ -191,6 +191,7 @@ Tests run in a namespace containing the learner's top-level names (so `rotate` i
 | `stdout` | Everything the learner's code printed at module level. |
 | `requires_syntax(ast.ListComp, msg)` / `forbids_syntax((ast.For, ast.While), msg)` | Enforce idioms by inspecting the learner's AST. |
 | `requires_call("sorted")` / `forbids_call("len")` | The learner must (not) call a function or method with this name. |
+| `within="func_name"` (on all four checks above) | Scope the check to one function or class. Use it whenever the starter already contains code that would satisfy a module-wide check, as in project steps. |
 | `requires_import("functools")` / `forbids_import(...)` | Same, for imports. |
 | `source`, `tree`, `ast` | The learner's raw source, its parsed `ast.Module`, and the `ast` module, for custom checks. |
 
@@ -213,7 +214,13 @@ Code runs in **Pyodide 314 (CPython 3.14)** inside a Web Worker. The same harnes
 - **Not available:** `input()` (raises), threads and processes (`threading.Thread.start()` raises `RuntimeError`), network access, and `zoneinfo` time zones (they need the `tzdata` package). Show those as static `python` code.
 - **Stdlib only** in runnable code. Pyodide can load NumPy and friends on demand, but the validator runs offline. Show third-party code as static fences. `sqlite3`, `csv`, `json`, `tomllib`, `logging`, `unittest`, `doctest`, `unittest.mock`, `argparse`, `asyncio`, `contextvars`, `ast`, `inspect`, `dis`, `gc` and `weakref` all work.
 - Runs time out after 10 seconds. Pyodide is about 2 to 3 times slower than native CPython: size large-input tests so an efficient solution finishes in well under a second.
-- **Keep recursion shallow (under about 500 frames).** Plain Python recursion past the limit (1000) raises `RecursionError` as usual. But recursion through C code, such as a `@functools.cache`-decorated function about 900 deep, or building and freeing very deeply nested structures, overflows the browser's WebAssembly stack and **kills the interpreter**. The site restarts Python and reports it, but don't design snippets or tests that go there. Use bottom-up/iterative solutions for big inputs.
+- **Keep recursion shallow.** Plain Python recursion past the limit (1000) raises `RecursionError` as usual. But recursion through C code, or freeing very long chains of objects, overflows the browser's WebAssembly stack and **kills the interpreter**. The site restarts Python and reports it, but don't design snippets or tests that go there. Measured in a Chrome web worker:
+  - plain recursion is fine to about 950 frames;
+  - `@functools.cache`/`lru_cache` recursion crashes between 600 and 800 deep (about 900 in the Node validator);
+  - freeing a linked list of plain objects crashes between 2,500 and 4,000 nodes.
+
+  Other browsers can be tighter, so stay well inside these: plain recursion ≤ 500, cached recursion ≤ 300, and linked or nested chains ≤ 1,000 nodes. Use bottom-up or iterative solutions for big inputs.
+- **Objects can outlive their run.** If an object with a printing `__del__`, or a suspended generator with printing cleanup (`finally`/`GeneratorExit`), survives the end of a snippet, its message can appear during a later run, because the interpreter is reused. Make sure such objects are finished or closed inside their own snippet. Global state such as `logging` configuration also persists across runs and lessons: use `force=True` and `disable_existing_loggers=False`.
 - **The interpreter is reused across runs on a page.** `__main__` is fresh every run, but `sys.modules` persists. Demos that write and import their own module files should call `sys.modules.pop("name", None)` first.
 - **asyncio runs on the browser's event loop.** It mostly behaves like CPython, but eager task factories aren't supported, and tasks still pending when `main()` returns are **not** cancelled. Await everything you start, keep total sleeps small, and show the rare CPython-only behaviour as static code. A coroutine that awaits forever can't be interrupted (the 10 s timeout still kills the run), so guard async tests with `asyncio.timeout(...)`.
 

@@ -188,6 +188,35 @@ in_range = 0 <= n < 10
 ```
 `a < b < c` means `a < b and b < c`, evaluating `b` once. In JS, `0 <= x <= 100` is always `true`; in Python it does what it says.
 
+### `x ||= y` / `x ??= y`: logical assignment
+```js
+options.retries ||= 3;
+name &&= name.trim();
+cache[key] ??= compute(key);
+```
+```python
+retries = retries or 3
+name = name and name.strip()
+```
+```python
+if key not in cache:
+    cache[key] = compute(key)
+```
+There are no logical assignment operators, so spell out `x = x or y`. `cache.setdefault(key, value)` covers `??=` on a dict, but it evaluates `value` even when the key already exists.
+
+### Line breaks inside an expression
+```js
+const total = subtotal +
+  shipping -
+  discount;
+```
+```python
+total = (subtotal
+         + shipping
+         - discount)
+```
+A newline ends the statement unless it's inside `()`, `[]` or `{}`, so a line ending in `subtotal +` is a `SyntaxError`. Wrap the expression in parentheses rather than ending lines with a fragile `\`.
+
 ## Numbers & math
 
 ### `i++` / `i--`
@@ -372,6 +401,47 @@ random.choice(deck)
 random.shuffle(deck)  # in place, returns None
 ```
 `random.sample(deck, k)` picks without replacement (`random.sample(deck, len(deck))` is a shuffled copy, like `_.shuffle`), and `random.choices(deck, k=5)` picks with replacement. Use the `secrets` module for tokens and passwords.
+
+### `Math.sign()` / `Number.isInteger()` / `Math.cbrt()`
+```js
+Math.sign(-3)          // -1
+Number.isInteger(5.0)  // true
+Math.cbrt(27)          // 3
+```
+```python
+math.copysign(1, -3)  # -1.0; (x > 0) - (x < 0) gives an int
+(5.0).is_integer()    # True, though isinstance(5.0, int) is False
+math.cbrt(27)         # 3.0 (3.11+)
+```
+There's no `math.sign`. JS has one number type, so `isInteger` tests the value, while in Python `isinstance(x, int)` tests the type and `is_integer()` the value (ints have it too since 3.12).
+
+### `toPrecision()` / `toExponential()` / round to hundreds
+```js
+(1234.5678).toPrecision(3)    // "1.23e+3"
+(0.000123).toExponential(2)   // "1.23e-4"
+Math.round(1234 / 100) * 100  // 1200
+```
+```python
+f"{1234.5678:.3g}"  # '1.23e+03': three significant digits
+f"{0.000123:.2e}"   # '1.23e-04'
+round(1234, -2)     # 1200: a negative ndigits rounds left of the point
+```
+Format specs always write at least two exponent digits (`e+03`). `round(1250, -2)` is `1200`, because ties go to the even neighbour here too.
+
+### `Intl.NumberFormat`: currency
+```js
+new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD",
+}).format(1234.5)  // "$1,234.50"
+```
+```python
+f"${amount:,.2f}"  # '$1,234.50', but -5 gives '$-5.00'
+```
+```python
+from babel.numbers import format_currency  # pip install babel
+format_currency(1234.5, "EUR", locale="de_DE")  # '1.234,50 €'
+```
+Format specs know nothing about currencies or locales. The stdlib's `locale.currency()` depends on a process-wide locale setting, so the third-party Babel is the usual stand-in for `Intl`.
 
 ## Strings
 
@@ -609,6 +679,69 @@ page = render_html(template)    # your function escapes each value
 ```
 A t-string (3.14+) keeps the literal parts and the interpolated values apart (`template.strings`, `template.values`), which is exactly what a tag function receives in JS ([Strings & f-strings](lesson:strings)).
 
+### `normalize()`: Unicode normalisation
+```js
+"e\u0301" === "é"                   // false
+"e\u0301".normalize("NFC") === "é"  // true
+```
+```python
+import unicodedata
+unicodedata.normalize("NFC", "e\u0301") == "é"  # True
+```
+As in JS, strings compare code point by code point, so normalise user input before comparing it or using it as a key. `"NFKC"` also folds compatibility characters, turning `"ﬁ"` into `"fi"`.
+
+### `_.escape()`: escape HTML
+```js
+_.escape('<a href="/">Tom & Jerry</a>')
+// '&lt;a href=&quot;/&quot;&gt;Tom &amp; Jerry&lt;/a&gt;'
+```
+```python
+import html
+html.escape('<a href="/">Tom & Jerry</a>')
+html.unescape("&lt;b&gt; &amp; &#39;")  # "<b> & '"
+```
+`escape()` also escapes both quote characters (`'` becomes `&#x27;`) unless you pass `quote=False`. Template engines such as Jinja2 escape for you.
+
+### Truncate with an ellipsis: `_.truncate()`
+```js
+_.truncate(title, { length: 20 })
+title.length > 20 ? title.slice(0, 19) + "…" : title
+```
+```python
+title if len(title) <= 20 else title[:19] + "…"
+```
+```python
+textwrap.shorten(title, width=20, placeholder="…")  # cuts at a word boundary
+```
+`shorten` also collapses runs of whitespace. Slicing never raises, so `title[:19]` is safe on short strings too.
+
+### Columns of text: `padEnd()` / `padStart()` tables
+```js
+`${name.padEnd(10)}${String(qty).padStart(5)}${price.toFixed(2).padStart(8)}`
+```
+```python
+f"{name:<10}{qty:>5}{price:>8.2f}"
+```
+```python
+f"{title:^30}"   # centred
+f"{title:-^30}"  # centred, padded with dashes
+```
+`<`, `>` and `^` align the value within the width, and a character before them sets the fill. Without an alignment, numbers go right and strings left.
+
+### `Intl.PluralRules`: plural forms
+```js
+const rules = new Intl.PluralRules("en-US");
+`${n} ${rules.select(n) === "one" ? "file" : "files"}`
+```
+```python
+f"{n} {'file' if n == 1 else 'files'}"
+```
+```python
+from gettext import ngettext
+ngettext("file", "files", n)  # follows each language's rules once translated
+```
+Until translations are installed, `ngettext` returns the singular only when `n == 1`. There's no `Intl.ListFormat` either: join the items by hand, or use Babel's `format_list`.
+
 ## Arrays → lists
 
 ### `arr.length` / `arr.length = 0`
@@ -787,6 +920,34 @@ items.remove(x)  # first match only; ValueError if missing
 items = [v for v in items if v != x]
 ```
 When `indexOf` returns -1, the JS version deletes the *last* item; `remove` raises instead.
+
+### `with()` / `toSpliced()`: change a copy
+```js
+const renamed = items.with(2, "z");
+const without = items.toSpliced(1, 1);
+const inserted = items.toSpliced(1, 0, "new");
+```
+```python
+renamed = items.copy()
+renamed[2] = "z"
+```
+```python
+without = items[:1] + items[2:]
+inserted = [*items[:1], "new", *items[1:]]
+```
+Slicing always builds new lists, so concatenating slices gives the copy-and-change variants without touching `items`. A bad index raises `IndexError` where `with()` throws a `RangeError`.
+
+### Index of the largest item
+```js
+scores.indexOf(Math.max(...scores))
+```
+```python
+scores.index(max(scores))
+```
+```python
+max(range(len(scores)), key=scores.__getitem__)  # a single pass
+```
+Both return the first index on ties and raise `ValueError` for an empty list. `max(enumerate(scores), key=itemgetter(1))` returns the index and the value together.
 
 ## map / filter / reduce & friends
 
@@ -1138,6 +1299,52 @@ class Config:
 ```
 A `MappingProxyType` is a read-only *view*, so changes to the dict behind it still show through, and assigning to a frozen dataclass field raises `FrozenInstanceError`. Both are shallow, like `freeze`.
 
+### `WeakMap` / `WeakRef`
+```js
+const meta = new WeakMap();
+meta.set(node, { visited: true });
+const ref = new WeakRef(cache);
+ref.deref();
+```
+```python
+meta = weakref.WeakKeyDictionary()
+meta[node] = {"visited": True}
+ref = weakref.ref(cache)
+ref()  # None once the object has been collected
+```
+An entry disappears when its key object is garbage-collected, and `weakref.finalize()` plays the role of `FinalizationRegistry`. Instances of your own classes support weak references, but built-in `int`, `str`, `tuple`, `list` and `dict` objects don't.
+
+### The oldest key / LRU order
+```js
+const oldest = cache.keys().next().value;
+cache.delete(key);
+cache.set(key, value);  // move to the end
+```
+```python
+oldest = next(iter(cache))
+cache[key] = cache.pop(key)  # move to the end
+```
+```python
+cache = OrderedDict()      # from collections
+cache.move_to_end(key)     # mark as recently used
+cache.popitem(last=False)  # evict the oldest
+```
+Dicts keep insertion order and assigning to an existing key doesn't move it, exactly like a `Map`. For caching function results, `functools.lru_cache` already does all of this.
+
+### Conditional keys: `...(cond && { key })`
+```js
+const query = { q, ...(page > 1 && { page }) };
+```
+```python
+query = {"q": q}
+if page > 1:
+    query["page"] = page
+```
+```python
+query = {"q": q, **({"page": page} if page > 1 else {})}
+```
+Spreading `False` raises `TypeError` in Python, so the inline version needs an explicit `else {}`, and the plain `if` usually reads better.
+
 ## Sets
 
 ### `new Set()`
@@ -1234,6 +1441,17 @@ seen.add((1, 2))
 (1, 2) in seen  # True: compared by value
 ```
 Lists, dicts and sets are unhashable (`TypeError`), so store tuples or `frozenset`s. A `frozenset` is an immutable set that can itself be a set member or a dict key.
+
+### Intersect or union many sets
+```js
+const common = sets.reduce((a, b) => a.intersection(b));
+const everyTag = sets.reduce((a, b) => a.union(b), new Set());
+```
+```python
+common = set.intersection(*sets)
+every_tag = set().union(*sets)
+```
+The method forms take any number of iterables, so unpack the list instead of reducing. `set.intersection(*sets)` raises `TypeError` for an empty list, much as `reduce` without an initial value throws.
 
 ## Destructuring & spread
 
@@ -1353,6 +1571,18 @@ def bounds(xs):
 lo, hi = bounds(xs)
 ```
 `return a, b` returns a tuple, which you unpack at the call site. Beyond two or three fields, return a `NamedTuple` or a dataclass.
+
+### `function f({ title, body })`: destructure parameters
+```js
+function render({ title, body = "" }) {}
+render(post);
+```
+```python
+def render(*, title, body="", **_):
+    ...
+render(**post)
+```
+`**post` spreads the dict into keyword arguments, and without the `**_` catch-all any extra key raises `TypeError`. Passing the dict itself and reading `post["title"]` is just as common.
 
 ## Control flow
 
@@ -1498,6 +1728,55 @@ print(i)  # 2: the loop variable outlives the loop
 ```
 Only functions, classes, modules and comprehensions create scopes, so names assigned inside `if`, `for`, `while` and `with` blocks stay visible afterwards ([Variables, Types & Scope](lesson:variables-and-scope)).
 
+### `break outer`: labelled loops
+```js
+outer: for (const row of grid)
+  for (const cell of row)
+    if (cell === target) break outer;
+```
+```python
+for r, c in product(range(len(grid)), range(len(grid[0]))):  # from itertools
+    if grid[r][c] == target:
+        break  # there's only one loop to leave
+```
+```python
+def find(grid, target):
+    for r, row in enumerate(grid):
+        if target in row:
+            return r, row.index(target)
+```
+Python has no labels. Flatten the nesting with `itertools.product`, or move the loops into a function and `return` from it.
+
+### `switch (typeof x)`: dispatch on type
+```js
+switch (typeof value) {
+  case "number": return value.toFixed(2);
+  case "string": return value.trim();
+}
+```
+```python
+match value:
+    case int() | float(): return f"{value:.2f}"
+    case str(): return value.strip()
+    case [*items]: return ", ".join(map(str, items))
+```
+A class pattern such as `int()` is an `isinstance` check, so `True` matches it too. `[*items]` matches any sequence except `str`, `bytes` and `bytearray` ([Pattern Matching](lesson:pattern-matching)).
+
+### Redux-style reducers: `switch (action.type)`
+```js
+switch (action.type) {
+  case "add": return [...todos, action.item];
+  case "clear": return [];
+}
+```
+```python
+match action:
+    case {"type": "add", "item": item}: return [*todos, item]
+    case {"type": "clear"}: return []
+    case _: return todos
+```
+A mapping pattern checks the keys and binds the values in one step, ignoring any extra keys. When a key is missing, that case simply fails instead of producing `undefined`.
+
 ## Functions
 
 ### `function` → `def`
@@ -1634,6 +1913,28 @@ def fetch_user(user_id):
     ...
 ```
 `@retry(times=3)` above a `def` is shorthand for `fetch_user = retry(times=3)(fetch_user)`. In your own wrappers, use `functools.wraps` to keep the name and docstring ([Decorators](lesson:decorators)).
+
+### `pipe()` / `compose()`
+```js
+const slugify = pipe(trim, toLower, (s) => s.replace(/\s+/g, "-"));
+```
+```python
+def pipe(*fns):
+    return lambda value: reduce(lambda acc, fn: fn(acc), fns, value)
+slugify = pipe(str.strip, str.lower, lambda s: re.sub(r"\s+", "-", s))
+```
+There's no built-in `pipe`, and this `functools.reduce` one-liner is the usual helper. Methods looked up on the class, such as `str.strip`, work as plain functions.
+
+### `Maximum call stack size exceeded`: the recursion limit
+```js
+function depth(node) { return node ? 1 + depth(node.next) : 0; }
+// RangeError: Maximum call stack size exceeded
+```
+```python
+sys.getrecursionlimit()      # 1000 by default
+sys.setrecursionlimit(5000)  # raise it with care
+```
+Python raises `RecursionError` after about a thousand nested calls and never optimises tail calls, so rewrite deep recursion as a loop, with an explicit stack if needed.
 
 ## Classes & objects
 
@@ -1789,6 +2090,121 @@ hasattr(user, field)
 ```
 Square brackets mean indexing (`__getitem__`), a separate protocol from attributes. `vars(user)` returns the instance's attribute dict.
 
+### `{ get total() {} }`: getters on object literals
+```js
+const cart = {
+  items: [],
+  get total() { return this.items.reduce((sum, i) => sum + i.price, 0); },
+};
+```
+```python
+class Cart:
+    @property
+    def total(self):
+        return sum(item.price for item in self.items)
+```
+Dicts can't compute values on access, so a derived field needs a class (or a dataclass) with a `@property`, which then reads like an attribute: `cart.total`.
+
+### `new Proxy(obj, { get })` → `__getattr__`
+```js
+const env = new Proxy({}, {
+  get: (_, name) => process.env[name],
+});
+env.API_KEY;
+```
+```python
+class Env:
+    def __getattr__(self, name):  # runs only when normal lookup fails
+        if name not in os.environ: raise AttributeError(name)
+        return os.environ[name]
+```
+`__getattribute__` intercepts every lookup and `__setattr__` every assignment, like the `get` and `set` traps. Raising `AttributeError` for unknown names keeps `getattr(obj, name, default)` and `hasattr()` working ([Dunder Methods](lesson:dunder-methods#attribute-hooks-getattr)).
+
+### `Symbol()`: a unique sentinel
+```js
+const MISSING = Symbol("missing");
+function get(key, fallback = MISSING) {}
+```
+```python
+MISSING = object()
+def get(key, default=MISSING):
+    if default is MISSING: ...
+```
+A bare `object()` equals only itself, so it can mean "no argument given" even where `None` is a valid value. Compare it with `is`.
+
+### `valueOf()` / `Symbol.toPrimitive`: conversions
+```js
+class Money {
+  valueOf() { return this.cents / 100; }
+  toString() { return `$${(this.cents / 100).toFixed(2)}`; }
+}
+```
+```python
+class Money:
+    def __float__(self): return self.cents / 100          # float(m)
+    def __str__(self): return f"${self.cents / 100:.2f}"  # str(m), f"{m}"
+    def __lt__(self, other): return self.cents < other.cents  # m < n, sorted()
+```
+Python never converts implicitly: each builtin and operator calls its own dunder, so `m + 1` raises `TypeError` until you define `__add__` ([Dunder Methods](lesson:dunder-methods)).
+
+### `equals()` / `hashCode()` → `__eq__` / `__hash__`
+```js
+a.equals(b)
+seen.add(`${p.x},${p.y}`);  // Set compares objects by reference
+```
+```python
+@dataclass(frozen=True)  # generates __eq__ and __hash__
+class Point:
+    x: int
+    y: int
+```
+```python
+def __eq__(self, other):
+    return isinstance(other, Point) and (self.x, self.y) == (other.x, other.y)
+def __hash__(self):
+    return hash((self.x, self.y))
+```
+Defining `__eq__` alone sets `__hash__` to `None`, so instances can't go in a set or serve as dict keys until you add a `__hash__` that agrees with it ([Dunder Methods](lesson:dunder-methods#equality-and-hashing)).
+
+### `compareTo()` → `__lt__` and `total_ordering`
+```js
+versions.sort((a, b) => a.compareTo(b));
+```
+```python
+@total_ordering  # from functools: derives <=, > and >=
+class Version:
+    def __eq__(self, other): return self.parts == other.parts
+    def __lt__(self, other): return self.parts < other.parts
+```
+`sorted()`, `min()` and `max()` need only `__lt__`, so the instances sort without a comparator. `@dataclass(order=True)` generates all of these methods from the fields.
+
+### `length` / indexing / `includes()`: collection protocols
+```js
+class Playlist {
+  get length() { return this.songs.length; }
+  at(i) { return this.songs.at(i); }
+}
+```
+```python
+class Playlist:
+    def __len__(self): return len(self.songs)               # len(p), bool(p)
+    def __getitem__(self, i): return self.songs[i]          # p[0], p[-1], p[1:3]
+    def __contains__(self, song): return song in self.songs  # song in p
+```
+With just `__len__` and `__getitem__`, instances already support `len()`, indexing, slicing, `for` loops, `in` and `reversed()`, and an empty one is falsy.
+
+### Duck typing: `typeof x[Symbol.iterator] === "function"`
+```js
+typeof value?.[Symbol.iterator] === "function"
+typeof value?.then === "function"  // a thenable?
+```
+```python
+from collections.abc import Iterable
+isinstance(value, Iterable)  # True for str too
+inspect.isawaitable(value)
+```
+Single-method ABCs such as `Iterable` and `Sized` recognise any class that defines the method, while `Mapping` and `Sequence` need inheritance or `register()`. Strings are iterable, so rule out `str` first when you mean "a collection".
+
 ## Errors
 
 ### `throw new Error()` → `raise`
@@ -1929,6 +2345,34 @@ with open(path, encoding="utf-8") as f:
 ```
 `with` runs the object's exit hook even when an exception escapes, like JS's `using` and `Symbol.dispose`. Write your own with `@contextlib.contextmanager` ([Context Managers](lesson:context-managers)).
 
+### Add context to an error: `add_note()`
+```js
+catch (err) {
+  err.message = `row ${i}: ${err.message}`;
+  throw err;
+}
+```
+```python nocheck
+except ValueError as err:
+    err.add_note(f"while importing row {i}")  # 3.11+
+    raise
+```
+Notes print under the message in the traceback, and a bare `raise` re-raises with the original traceback intact ([Errors & Exceptions](lesson:exceptions#exception-groups-and-notes)).
+
+### `return` inside `finally`
+```js
+function save() {
+  try { return write(); }
+  finally { return "fallback"; }  // swallows any error
+}
+```
+```python
+def save():
+    try: return write()
+    finally: return "fallback"  # SyntaxWarning in 3.14
+```
+As in JS, a `return`, `break` or `continue` in `finally` replaces the pending result and silently discards any exception, which is why 3.14 warns about it (PEP 765). Keep `finally` for cleanup.
+
 ## Iterators & generators
 
 ### `function*` / `yield`
@@ -2036,6 +2480,42 @@ from itertools import combinations
 matchups = list(combinations(players, 2))  # every pair, order ignored
 ```
 `permutations(players, 2)` gives ordered pairs instead. All three return lazy iterators of tuples.
+
+### `gen.next(value)` → `send()`
+```js
+const avg = averager();
+avg.next();  // run to the first yield
+avg.next(10).value;
+```
+```python
+avg = averager()
+next(avg)  # run to the first yield
+avg.send(10)
+```
+`send(v)` resumes the generator and makes the paused `yield` expression evaluate to `v`. A fresh generator has to be started with `next()` (or `send(None)`) first.
+
+### `gen.return()` / `gen.throw()`
+```js
+gen.return();
+gen.throw(new Error("abort"));
+```
+```python
+gen.close()  # raises GeneratorExit at the paused yield
+gen.throw(ValueError("abort"))
+```
+Both run the generator's `finally` blocks, and CPython also closes an abandoned generator when it's garbage-collected. Unlike `return(value)`, `close()` takes no value.
+
+### `_.takeWhile()` / `_.dropWhile()`
+```js
+_.takeWhile(readings, (r) => r < limit)
+_.dropWhile(lines, (line) => line.startsWith("#"))
+```
+```python
+from itertools import takewhile, dropwhile
+list(takewhile(lambda r: r < limit, readings))
+list(dropwhile(lambda line: line.startswith("#"), lines))
+```
+Both are lazy and decide once: `takewhile` stops at the first failure, and `dropwhile` yields everything from that point on, including later matches.
 
 ## Async
 
@@ -2182,6 +2662,74 @@ worker.on("message", (result) => save(result));
 result = await asyncio.to_thread(resize_image, file)
 ```
 `to_thread` runs a blocking call in a thread so the event loop keeps serving other tasks. On the standard (GIL) build, threads don't run Python code in parallel, so CPU-heavy work belongs in `concurrent.futures.ProcessPoolExecutor`.
+
+### `Promise.withResolvers()` / `new Promise()` → a `Future`
+```js
+const { promise, resolve } = Promise.withResolvers();
+onReady(resolve);
+const result = await promise;
+```
+```python
+future = asyncio.get_running_loop().create_future()
+on_ready(future.set_result)  # any callback-based API
+result = await future
+```
+`set_result()` and `set_exception()` settle a future, and `asyncio.Event` is simpler when there's no value to pass. From another thread, settle it through `loop.call_soon_threadsafe(future.set_result, value)`.
+
+### `promise.then()` → `await` or `add_done_callback()`
+```js
+fetchUser(id).then((user) => cache.set(id, user));
+```
+```python
+async def fetch_and_cache(user_id):
+    cache[user_id] = await fetch_user(user_id)
+task = asyncio.create_task(fetch_and_cache(user_id))
+```
+```python
+task.add_done_callback(lambda t: print(t.result()))  # receives the task
+```
+Chained callbacks are rare: write a small coroutine and `await` inside it. A done callback receives the finished task, and `t.result()` re-raises the task's exception.
+
+### Worker pool: `asyncio.Queue`
+```js
+const queue = [...urls];
+const worker = async () => { while (queue.length) await crawl(queue.shift()); };
+await Promise.all([worker(), worker(), worker()]);
+```
+```python
+queue = asyncio.Queue()
+for url in urls: queue.put_nowait(url)
+workers = [asyncio.create_task(worker(queue)) for _ in range(3)]
+await queue.join()  # until every item is marked task_done()
+```
+Each worker loops on `await queue.get()` and calls `queue.task_done()` after each item, and once `join()` returns you cancel the workers (or `shutdown()` the queue, 3.13+). A `maxsize=` turns `put()` into backpressure.
+
+### Results as they finish: `as_completed()`
+```js
+for (const p of promises) p.then(render);  // in completion order
+```
+```python
+for next_done in asyncio.as_completed(tasks):
+    render(await next_done)
+```
+```python
+async for task in asyncio.as_completed(tasks):  # 3.13+
+    render(task.result())
+```
+Results arrive in completion order, not argument order. The plain `for` form yields awaitables, while `async for` yields the finished tasks themselves.
+
+### `Symbol.asyncIterator` → `__aiter__`
+```js
+class Ticker {
+  async *[Symbol.asyncIterator]() { yield await nextTick(); }
+}
+```
+```python
+class Ticker:
+    async def __aiter__(self):  # an async generator method
+        yield await next_tick()
+```
+`async for` calls `__aiter__`, so an async generator method is the shortest implementation, just as a generator `__iter__` makes a class iterable.
 
 ## Modules & tooling
 
@@ -2340,6 +2888,43 @@ sha = result.stdout.strip()
 ```
 A list of arguments skips the shell, so there's no quoting or injection risk, and `check=True` raises `CalledProcessError` on a non-zero exit code.
 
+### `await import()`: dynamic imports
+```js
+const plugin = await import(`./plugins/${name}.js`);
+```
+```python
+import importlib
+plugin = importlib.import_module(f"plugins.{name}")
+```
+```python
+importlib.reload(plugin)  # re-run a module, like clearing require.cache
+```
+`import_module` is synchronous and caches in `sys.modules` like `import` does. Relative names need an anchor: `import_module(".csv", package="exporters")`.
+
+### `index.js` barrel files → `__init__.py`
+```js
+// billing/index.js
+export { Invoice } from "./invoice.js";
+export * from "./taxes.js";
+```
+```python
+# billing/__init__.py
+from .invoice import Invoice
+from .taxes import *
+```
+A package's `__init__.py` runs on its first import, so re-exported names work as `from billing import Invoice`. Keep it light, since every importer pays for whatever it imports.
+
+### `import type` → `if TYPE_CHECKING:`
+```ts
+import type { Order } from "./orders";
+```
+```python
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from orders import Order  # seen by type checkers only
+```
+The block never runs, which sidesteps import cycles and slow imports. From 3.14, annotations are evaluated lazily, so `def total(order: Order)` then works unquoted (earlier versions need quotes or `from __future__ import annotations`).
+
 ## Dates & time
 
 ### `new Date()` / `Date.now()`
@@ -2472,6 +3057,65 @@ print(f"{time.perf_counter() - t0:.3f} s")
 ```
 `perf_counter()` is monotonic and high-resolution, made for durations; keep `time.time()` for wall-clock timestamps. `python -m timeit` benchmarks small snippets.
 
+### `toLocaleDateString()` / `Intl.DateTimeFormat`
+```js
+d.toLocaleDateString("en-US", {
+  weekday: "long", month: "long", day: "numeric",
+})  // "Monday, January 15"
+```
+```python
+f"{d:%A, %B} {d.day}"  # 'Monday, January 15'
+```
+```python
+d.strftime("%x")  # the current locale's date format, e.g. '01/15/24'
+```
+Day and month names follow the process-wide locale set by `locale.setlocale()`, so use Babel's `format_date` for other languages. `%-d` (no padding) doesn't work on Windows, hence `d.day`.
+
+### Days in a month / leap years
+```js
+new Date(2024, 2, 0).getDate()  // 29: "day 0" of March
+```
+```python
+calendar.monthrange(2024, 2)[1]  # 29
+calendar.isleap(2024)            # True
+```
+`monthrange` returns the weekday of the 1st and the number of days, with 1-based months. There's no day-0 trick, because `date(2024, 3, 0)` raises `ValueError`.
+
+### A range of dates
+```js
+for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {}
+```
+```python
+days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+```
+Subtracting two dates gives a `timedelta` whose `.days` sizes the range, and the `+ 1` makes `end` inclusive. To compare calendar days of two datetimes, compare `a.date() == b.date()`.
+
+### Format a duration as `H:MM:SS`
+```js
+new Date(seconds * 1000).toISOString().slice(11, 19)  // "01:02:05"
+```
+```python
+str(timedelta(seconds=3725))  # '1:02:05'
+```
+```python
+hours, rest = divmod(3725, 3600)
+f"{hours:02}:{rest // 60:02}:{rest % 60:02}"  # '01:02:05'
+```
+`str(timedelta)` doesn't pad the hours and switches to `'1 day, 0:00:05'` past 24 hours, so build the string with `divmod` when the format matters.
+
+### Temporal → `datetime`
+```js
+Temporal.PlainDate.from("2024-01-15")
+Temporal.Now.instant()
+Temporal.Duration.from({ hours: 2 })
+```
+```python
+date.fromisoformat("2024-01-15")
+datetime.now(UTC)
+timedelta(hours=2)
+```
+`date`, `time` and naive `datetime` play the `Plain*` roles, an aware `datetime` with a `ZoneInfo` is the `ZonedDateTime`, and like Temporal objects they're all immutable.
+
 ## Regular expressions
 
 ### `/re/.test(s)`
@@ -2584,6 +3228,65 @@ re.search(r"(?<=\$)\d+", text)
 re.search(r"\$\s*(\d+)", text)[1]  # a capture group instead
 ```
 Python lookbehinds must be fixed-width, so `(?<=\$\s*)` raises `re.error`. The third-party `regex` module lifts that limit.
+
+### `s.split(/re/)` → `re.split()`
+```js
+"a, b;c".split(/[,;]\s*/)  // ["a", "b", "c"]
+"a1b2".split(/(\d)/)       // ["a", "1", "b", "2", ""]
+```
+```python
+re.split(r"[,;]\s*", "a, b;c")  # ['a', 'b', 'c']
+re.split(r"(\d)", "a1b2")       # ['a', '1', 'b', '2', '']
+```
+`str.split` never takes a pattern, so use `re.split`. As in JS, capture groups keep the separators in the result, and `maxsplit=` caps the number of splits.
+
+### Sticky flag `/y`: match at a position
+```js
+const NUMBER = /\d+/y;
+NUMBER.lastIndex = 2;
+NUMBER.exec("ab12cd");
+```
+```python
+NUMBER = re.compile(r"\d+")
+NUMBER.match("ab12cd", 2)  # anchored at index 2: matches '12'
+```
+A compiled pattern's `match(text, pos)` anchors at `pos` without slicing the string, which is how tokenizers walk their input. There's no `lastIndex` state to reset.
+
+### `\p{L}`: Unicode property escapes
+```js
+/^\p{L}+$/u.test(name)
+```
+```python
+re.fullmatch(r"[^\W\d_]+", name)  # \w minus digits and "_": roughly "letters"
+```
+```python
+import regex  # pip install regex
+regex.fullmatch(r"\p{L}+", name)
+```
+The stdlib `re` has no `\p{...}` classes (they raise `re.error`), but its `\w` is Unicode-aware. The third-party `regex` module supports them and is otherwise a drop-in replacement.
+
+### Replacement strings: `$&` and backslashes
+```js
+"price".replace(/\w+/, "[$&]")
+"cd DIR".replace("DIR", "C:\\new")  // backslashes stay literal
+```
+```python
+re.sub(r"\w+", r"[\g<0>]", "price")  # \g<0> is the whole match
+re.sub("DIR", lambda m: r"C:\new", "cd DIR")  # a function's result is literal
+```
+Python processes escapes in replacement strings, so `r"C:\new"` would insert a newline and `r"C:\users"` raises `re.error`. Return the text from a function, or double the backslashes.
+
+### Readable patterns: `re.VERBOSE`
+```js
+const DATE = /(?<year>\d{4})-(?<month>\d{2})/;  // no room for comments
+```
+```python
+DATE = re.compile(r"""
+    (?P<year>\d{4})    # year
+    -(?P<month>\d{2})  # month
+""", re.VERBOSE)
+```
+Verbose mode ignores whitespace and `#` comments inside the pattern, so match a literal space with `\ ` or `\s`. JS has no equivalent flag.
 
 ## JSON & data
 
@@ -2760,6 +3463,65 @@ with urlopen("https://api.example.com/users") as res:
     users = json.load(res)
 ```
 httpx and requests are third-party, and httpx also has an `AsyncClient` for `await`. The stdlib `urlopen` raises `HTTPError` for 4xx and 5xx responses, unlike `fetch`.
+
+### `JSON.parse(text, reviver)` → `object_hook`
+```js
+JSON.parse(text, (key, value) =>
+  key === "createdAt" ? new Date(value) : value);
+```
+```python
+def revive(obj):  # called with each decoded object, innermost first
+    if "created_at" in obj:
+        obj["created_at"] = datetime.fromisoformat(obj["created_at"])
+    return obj
+```
+```python
+data = json.loads(text, object_hook=revive)
+```
+Unlike a reviver, the hook receives whole dicts rather than single key/value pairs. `parse_float=` and `parse_int=` customise how numbers are decoded.
+
+### Big integers and exact decimals in JSON
+```js
+JSON.parse("12345678901234567890")  // 12345678901234567000
+JSON.parse('{"price": 0.1}').price  // a double
+```
+```python
+json.loads("12345678901234567890")  # 12345678901234567890, exact
+json.loads('{"price": 0.1}', parse_float=Decimal)  # {'price': Decimal('0.1')}
+```
+Integers decode to arbitrary-precision `int`s, so IDs never lose digits on the Python side, though a JS client reading the same JSON still might.
+
+### `JSON.stringify(NaN)`: non-finite numbers
+```js
+JSON.stringify({ ratio: NaN, max: Infinity })  // '{"ratio":null,"max":null}'
+```
+```python
+json.dumps({"ratio": math.nan})  # '{"ratio": NaN}': not valid JSON!
+json.dumps(data, allow_nan=False)  # raises ValueError instead
+```
+Python writes `NaN` and `Infinity`, which `json.loads` reads back but `JSON.parse` rejects. Replace them with `None` first, or pass `allow_nan=False` to fail loudly.
+
+### JSON Lines
+```js
+const events = text.trim().split("\n").map((line) => JSON.parse(line));
+```
+```python
+with open("events.jsonl", encoding="utf-8") as f:
+    events = [json.loads(line) for line in f if line.strip()]
+```
+```python
+log.write(json.dumps(event) + "\n")  # append one object per line
+```
+`json.dumps` never emits a raw newline (it escapes them inside strings as `\n`), so one object per line is safe to append and stream.
+
+### Parsed JSON → objects: `User(**data)`
+```ts
+const user: User = JSON.parse(raw);  // trusts the shape
+```
+```python
+user = User(**json.loads(raw))  # User is a dataclass
+```
+Unpacking into a dataclass raises `TypeError` for missing or unexpected keys but doesn't check value types; pydantic validates those too.
 
 ## TypeScript → type hints
 
@@ -2945,6 +3707,74 @@ uvx pyright
 ```
 Python never checks annotations itself, so run a checker in CI the way you run `tsc`. `reveal_type(expr)` makes the checker print an expression's inferred type.
 
+### Overloads → `@overload`
+```ts
+function parse(input: string): Date;
+function parse(input: number): Date;
+function parse(input: string | number): Date {}
+```
+```python
+@overload
+def parse(value: str) -> date: ...
+@overload
+def parse(value: int) -> date: ...
+```
+The `@overload` stubs (from `typing`) exist only for the checker. A single undecorated implementation follows them and does the real work at runtime.
+
+### `this` return type → `Self`
+```ts
+class Query {
+  where(cond: string): this { return this; }
+}
+```
+```python
+from typing import Self  # 3.11+
+class Query:
+    def where(self, cond: str) -> Self:
+        return self
+```
+`Self` keeps chained calls typed as the subclass when a subclass calls them, like TS's polymorphic `this`.
+
+### Branded types → `NewType`
+```ts
+type UserId = string & { readonly __brand: "UserId" };
+const id = "u_123" as UserId;
+```
+```python
+from typing import NewType
+UserId = NewType("UserId", str)
+user_id = UserId("u_123")  # still a plain str at runtime
+```
+Checkers treat `UserId` as a distinct subtype of `str`, so passing an unbranded `str` where a `UserId` is expected is an error. At runtime the call just returns its argument.
+
+### `Partial<T>` / `Pick<T, K>` / `keyof T`
+```ts
+type UserPatch = Partial<User>;
+type UserField = keyof User;
+```
+```python
+class UserPatch(TypedDict, total=False):
+    name: str
+    email: str
+type UserField = Literal["name", "email"]
+```
+There are no mapped, conditional or `keyof` types, so derived shapes are written out by hand. `total=False` is the closest thing to `Partial`.
+
+### Discriminated unions
+```ts
+type Shape = { kind: "circle"; r: number } | { kind: "square"; side: number };
+```
+```python
+@dataclass
+class Circle: r: float
+@dataclass
+class Square: side: float
+```
+```python
+type Shape = Circle | Square  # narrowed by isinstance() or match
+```
+A union of dataclasses narrows through `isinstance` checks and `match` class patterns. For plain dicts from JSON, use `TypedDict`s that share a `Literal` tag field, which checkers narrow the way TS does.
+
 ## Lodash-style utilities
 
 ### `_.chunk()`
@@ -3090,3 +3920,1499 @@ items[-n:] if n else []
 items[n:]
 ```
 `items[-n:]` on its own returns the *whole* list when `n` is 0, because `-0 == 0`.
+
+## Node.js APIs → stdlib
+
+### `fs.promises`: async file I/O
+```js
+import { readFile } from "node:fs/promises";
+const text = await readFile("notes.txt", "utf8");
+```
+```python
+text = await asyncio.to_thread(Path("notes.txt").read_text, encoding="utf-8")
+```
+```python
+import aiofiles  # pip install aiofiles
+async with aiofiles.open("notes.txt", encoding="utf-8") as f:
+    text = await f.read()
+```
+Python's file APIs are synchronous, which is fine in scripts. Inside an event loop, move slow reads to a thread with `asyncio.to_thread()` so other tasks keep running ([Async/Await](lesson:async#blocking-code-and-the-sync-ecosystem)).
+
+### `fs.statSync()`: size and modification time
+```js
+const { size, mtimeMs } = fs.statSync(file);
+fs.statSync(file).isDirectory()
+```
+```python
+info = Path(file).stat()
+info.st_size, info.st_mtime  # bytes, and seconds since the epoch
+Path(file).is_dir()
+```
+`st_mtime` is a float in seconds where `mtimeMs` is milliseconds, and `datetime.fromtimestamp(info.st_mtime, UTC)` turns it into a datetime.
+
+### `fs.rmSync()` / `cpSync()` / `renameSync()`: delete, copy, move
+```js
+fs.rmSync("build", { recursive: true, force: true });
+fs.cpSync("assets", "dist/assets", { recursive: true });
+fs.renameSync("draft.md", "post.md");
+fs.unlinkSync("old.log");
+```
+```python
+shutil.rmtree("build", ignore_errors=True)
+shutil.copytree("assets", "dist/assets", dirs_exist_ok=True)
+Path("draft.md").replace("post.md")
+Path("old.log").unlink(missing_ok=True)
+```
+`ignore_errors=True` swallows every error, not just a missing directory. `Path.rename()` fails on Windows when the target exists, whereas `replace()` overwrites everywhere and `shutil.move()` also works across drives.
+
+### `fs.mkdtempSync()` / `os.tmpdir()`: temporary files
+```js
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "build-"));
+fs.rmSync(dir, { recursive: true });
+```
+```python
+with tempfile.TemporaryDirectory(prefix="build-") as tmp:
+    bundle = Path(tmp) / "bundle.js"
+```
+```python
+with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as f:
+    f.write(report)
+```
+`TemporaryDirectory` deletes the folder and everything in it when the block ends, and `tempfile.gettempdir()` is the equivalent of `os.tmpdir()`.
+
+### `readdirSync(dir, { recursive: true })`: walk a tree
+```js
+fs.readdirSync("src", { recursive: true })
+fs.globSync("src/**/*.ts")  // Node 22+
+```
+```python
+sorted(Path("src").rglob("*.py"))
+```
+```python
+for folder, subdirs, files in Path("src").walk():  # 3.12+; os.walk() before
+    subdirs[:] = [d for d in subdirs if d != "node_modules"]  # prune in place
+```
+`rglob(pattern)` searches every level below, like `**/pattern`. `walk()` yields each folder with its subfolders and files, and editing `subdirs` in place skips whole branches.
+
+### `path.resolve()` / `relative()` / `isAbsolute()`
+```js
+path.resolve("config", "app.json")
+path.relative("/srv/app", "/srv/app/static/css")  // "static/css"
+path.isAbsolute(p)
+```
+```python
+Path("config", "app.json").resolve()
+Path("/srv/app/static/css").relative_to("/srv/app")  # static/css
+Path(p).is_absolute()
+```
+`relative_to()` raises `ValueError` when the path isn't inside the base, unless you pass `walk_up=True` (3.12+) to allow `..` segments. `resolve()` also follows symlinks, which `path.resolve()` doesn't.
+
+### `path.parse()`: swap the extension or the name
+```js
+const { dir, name } = path.parse(file);
+path.join(dir, `${name}.html`)
+path.basename(file, ".md")
+```
+```python
+Path(file).with_suffix(".html")
+Path(file).stem  # the name without its extension
+Path(file).with_name("index.html"), Path(file).with_stem("intro")
+```
+`suffix` is only the last extension (`.gz` for `backup.tar.gz`), while `suffixes` lists them all. Every `with_*` method returns a new path and leaves the file alone.
+
+### `process.cwd()` / `os.homedir()` / `process.platform`
+```js
+process.cwd()
+os.homedir()
+process.platform  // "win32", "darwin", "linux"
+os.cpus().length
+```
+```python
+Path.cwd()
+Path.home()
+sys.platform  # 'win32', 'darwin', 'linux'
+os.cpu_count()  # may be None
+```
+`os.chdir()` changes the directory for the whole process, while `with contextlib.chdir(path):` (3.11+) restores it afterwards. `platform.system()` returns `'Windows'`, `'Darwin'` or `'Linux'`.
+
+### `process.hrtime.bigint()`: nanosecond timers
+```js
+const start = process.hrtime.bigint();
+work();
+const elapsedNs = process.hrtime.bigint() - start;
+```
+```python
+start = time.perf_counter_ns()
+work()
+elapsed_ns = time.perf_counter_ns() - start
+```
+The `_ns` variants return `int`s and avoid float rounding. `time.monotonic_ns()` suits timeouts, and `time.time_ns()` reads the wall clock.
+
+### `process.on("exit")` / `process.on("SIGTERM")`
+```js
+process.on("exit", () => flushLogs());
+process.on("SIGTERM", () => server.close());
+```
+```python
+atexit.register(flush_logs)
+signal.signal(signal.SIGTERM, lambda signum, frame: server.close())
+```
+Ctrl+C arrives as a `KeyboardInterrupt` exception, so `finally` and `with` blocks clean up on their own. Exit handlers don't run when a signal Python doesn't handle kills the process, or after `os._exit()`.
+
+### `process.stdin` / `readline.question()`
+```js
+const name = await rl.question("Project name? ");
+for await (const line of rl) {}  // rl reads process.stdin
+process.stdin.isTTY
+```
+```python
+name = input("Project name? ")
+for line in sys.stdin:  # lazily, until end of input
+    ...
+sys.stdin.isatty()
+```
+`input()` strips the newline and raises `EOFError` at the end of input, and `sys.stdin.read()` slurps everything, as in `cat data.json | python app.py`.
+
+### `child_process.spawn()`: stream a command's output
+```js
+const child = spawn("make", ["build"]);
+child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+child.on("close", (code) => {});
+```
+```python
+cmd = ["make", "build"]
+with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) as proc:
+    for line in proc.stdout:
+        print(line, end="")
+```
+```python
+proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE)
+```
+Leaving the `with` block waits for the process, and then `proc.returncode` holds the exit code. In async code, `create_subprocess_exec()` gives you `async for line in proc.stdout` and `await proc.wait()`.
+
+### `exec()` with a shell string
+```js
+exec(`grep -rc "${term}" src`, (err, stdout) => {});
+```
+```python
+subprocess.run(["grep", "-rc", term, "src"], capture_output=True, text=True)
+```
+```python
+cmd = f"grep -rc {shlex.quote(term)} src | sort"
+subprocess.run(cmd, shell=True, capture_output=True, text=True)
+```
+With a list there's no shell, so `term` can't inject commands. When you really need pipes or globs, `shell=True` takes a string: quote every interpolated value with `shlex.quote()` (POSIX shells only).
+
+### `EventEmitter`: subscribe and emit
+```js
+const bus = new EventEmitter();
+bus.on("order", sendReceipt);
+bus.emit("order", order);
+```
+```python
+handlers = defaultdict(list)
+handlers["order"].append(send_receipt)  # bus.on(...)
+for handler in handlers["order"]:       # bus.emit(...)
+    handler(order)
+```
+There's no built-in emitter, but a dict of callback lists covers most uses. The third-party `pyee` mirrors the Node API, and `blinker` provides named signals.
+
+### `events.once()`: wait for a signal
+```js
+await once(server, "listening");
+```
+```python
+ready = asyncio.Event()
+# the producer calls ready.set()
+await ready.wait()
+```
+An `asyncio.Event` is a reusable flag: `wait()` returns at once while it's set, until someone calls `clear()`. To pass a value along, await a `Future` instead.
+
+### Streams and `pipeline()` → generators
+```js
+await pipeline(
+  fs.createReadStream("app.log"), keepErrors, fs.createWriteStream("errors.log"),
+);
+```
+```python
+with (open("app.log", encoding="utf-8") as src,
+      open("errors.log", "w", encoding="utf-8") as dst):
+    dst.writelines(line for line in src if "ERROR" in line)
+```
+```python
+def parse(lines):  # a Transform stream is a generator function
+    for line in lines:
+        yield json.loads(line)
+```
+Files iterate lazily, line by line, and generators pull one item at a time, so the pipeline runs in constant memory with no backpressure to manage. Parenthesised `with` needs 3.10+ ([Iterators & Generators](lesson:iterators-and-generators#lazy-pipelines-and-the-es2025-iterator-helpers)).
+
+### Read in chunks / hash a big file
+```js
+for await (const chunk of fs.createReadStream(file, { highWaterMark: 65536 })) {
+  hash.update(chunk);
+}
+```
+```python
+with open(file, "rb") as f:
+    while chunk := f.read(65536):
+        hasher.update(chunk)
+```
+```python
+with open(file, "rb") as f:
+    digest = hashlib.file_digest(f, "sha256").hexdigest()  # 3.11+
+```
+`read(n)` returns at most `n` bytes, and `b""` at the end of the file, which ends the walrus loop.
+
+### `Buffer`: hex, concat and alloc
+```js
+Buffer.from("cafe", "hex")
+buf.toString("hex")
+Buffer.concat(chunks)
+Buffer.alloc(16)
+```
+```python
+bytes.fromhex("cafe")  # b'\xca\xfe'
+data.hex()             # data.hex(":") adds separators
+b"".join(chunks)
+bytearray(16)          # zero-filled and mutable
+```
+`bytes` is immutable and `bytearray` allows `buf[0] = 255`; indexing either one gives an `int`. Slicing copies, so use `memoryview(buf)[2:6]` for a shared view like `subarray()`.
+
+### `buf.readUInt32BE()`: binary integers
+```js
+buf.readUInt32BE(0)
+buf.readInt16LE(4)
+const out = Buffer.alloc(4); out.writeUInt32BE(n);
+```
+```python
+int.from_bytes(buf[0:4], "big")
+int.from_bytes(buf[4:6], "little", signed=True)
+n.to_bytes(4, "big")  # OverflowError if n doesn't fit
+```
+```python
+magic, version = struct.unpack_from(">IH", buf, 0)  # big-endian uint32, uint16
+```
+`struct` packs and unpacks several fixed-size fields in one call, much like a `DataView`, using format codes such as `>` (big-endian), `I` (uint32) and `h` (int16).
+
+### `crypto.createHmac()` / `timingSafeEqual()`
+```js
+const sig = crypto.createHmac("sha256", secret).update(body).digest("hex");
+crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(header));
+```
+```python
+sig = hmac.new(secret, body, hashlib.sha256).hexdigest()
+hmac.compare_digest(sig, header)
+```
+`secret` and `body` must be bytes, so `.encode()` strings first. `compare_digest` takes the same time wherever the inputs differ, which is what checking a webhook signature needs.
+
+### `new URL(path, base)` / `searchParams.set()`
+```js
+new URL("../img/logo.png", "https://shop.dev/docs/guide/").href
+url.searchParams.set("page", "3");
+```
+```python
+urljoin("https://shop.dev/docs/guide/", "../img/logo.png")
+# 'https://shop.dev/docs/img/logo.png'
+```
+```python
+parts = urlsplit(url)
+query = dict(parse_qsl(parts.query)) | {"page": "3"}
+url = urlunsplit(parts._replace(query=urlencode(query)))
+```
+Everything here comes from `urllib.parse`. Split URLs are immutable named tuples, so `_replace()` returns a modified copy, and `urlencode(params, doseq=True)` writes list values as repeated keys.
+
+### `zlib.gzipSync()` / `createGzip()`
+```js
+const packed = zlib.gzipSync(data);
+zlib.gunzipSync(packed);
+fs.createReadStream("log.txt").pipe(zlib.createGzip()).pipe(out);
+```
+```python
+packed = gzip.compress(data)
+gzip.decompress(packed)
+```
+```python
+with gzip.open("log.txt.gz", "wt", encoding="utf-8") as f:
+    f.writelines(lines)  # compressed as it's written
+```
+`zlib.compress()` gives the zlib format that `deflateSync` produces, and `bz2`, `lzma`, `zipfile` and `tarfile` cover other formats. 3.14 adds Zstandard as `compression.zstd`.
+
+### `util.promisify()`: callbacks → `await`
+```js
+const readFileAsync = util.promisify(fs.readFile);
+const data = await readFileAsync(path);
+```
+```python
+data = await asyncio.to_thread(read_report, path)  # any blocking function
+```
+```python
+loop = asyncio.get_running_loop()
+future = loop.create_future()
+legacy_fetch(url, lambda r: loop.call_soon_threadsafe(future.set_result, r))
+data = await future
+```
+Python APIs rarely take callbacks: a blocking function becomes awaitable with `to_thread()`, and a callback API becomes one by settling a `Future`.
+
+### `util.inspect()` / `console.dir()`: pretty-print
+```js
+console.dir(config, { depth: null });
+util.inspect(config, { depth: 2, breakLength: 60 })
+```
+```python
+from pprint import pp, pformat
+pp(config)  # wraps at 80 columns, keeps insertion order
+pformat(config, depth=2, width=60)
+```
+`pprint()` and `pformat()` sort dict keys unless you pass `sort_dicts=False`, which `pp()` does for you. `repr(obj)` is the one-line form.
+
+### `node:assert`
+```js
+assert.strictEqual(total, 42);
+assert.deepStrictEqual(rows, [{ id: 1 }]);
+assert.throws(() => parse(""), SyntaxError);
+```
+```python
+assert total == 42
+assert rows == [{"id": 1}]  # == is already deep
+```
+```python
+check = unittest.TestCase()  # its assert* methods work outside a test run
+check.assertRaises(ValueError, parse, "")
+```
+`python -O` strips `assert` statements, so use them for invariants and tests, never for input validation. In tests, pytest rewrites a failing `assert` to show both sides.
+
+### `worker_threads` pool → `ProcessPoolExecutor`
+```js
+const pool = new Piscina({ filename: "./resize.js" });
+const thumbnails = await Promise.all(files.map((f) => pool.run(f)));
+```
+```python
+from concurrent.futures import ProcessPoolExecutor
+with ProcessPoolExecutor() as pool:
+    thumbnails = list(pool.map(resize, files))
+```
+Each worker is a separate process, so CPU-bound Python runs in parallel despite the GIL, but arguments and results are pickled and the script needs an `if __name__ == "__main__":` guard. 3.14's `InterpreterPoolExecutor` runs isolated interpreters inside one process, closer to worker threads.
+
+### `AsyncLocalStorage` → `contextvars`
+```js
+const store = new AsyncLocalStorage();
+store.run({ requestId }, () => handle(req));
+store.getStore().requestId
+```
+```python
+request_id = contextvars.ContextVar("request_id", default=None)
+request_id.set(new_id)  # visible to this task and everything it awaits
+request_id.get()
+```
+Each asyncio task runs in a copy of the context taken when it was created, so a value set while handling one request never leaks into another. `set()` returns a token that `reset()` uses to restore the old value.
+
+### `err.code === "ENOENT"`: filesystem errors
+```js
+try { text = fs.readFileSync(path, "utf8"); }
+catch (err) { if (err.code === "ENOENT") text = null; else throw err; }
+```
+```python
+try:
+    text = Path(path).read_text(encoding="utf-8")
+except FileNotFoundError:
+    text = None
+```
+OS errors are `OSError` subclasses named after the error code: `FileNotFoundError` (ENOENT), `FileExistsError` (EEXIST), `PermissionError` (EACCES) and `IsADirectoryError` (EISDIR). `err.errno` and `err.filename` hold the details.
+
+### `node:sqlite` / `better-sqlite3` → `sqlite3`
+```js
+const db = new DatabaseSync("app.db");  // node:sqlite
+const adults = db.prepare("SELECT * FROM users WHERE age >= ?").all(18);
+```
+```python
+conn = sqlite3.connect("app.db")
+adults = conn.execute("SELECT * FROM users WHERE age >= ?", (18,)).fetchall()
+```
+Pass parameters separately (a tuple, even for one value) instead of formatting them into the SQL, and set `conn.row_factory = sqlite3.Row` to read columns by name. `with conn:` wraps a transaction but doesn't close the connection.
+
+## Testing: Jest/Vitest → pytest/unittest
+
+### `describe()` / `it()`: test layout
+```js
+// cart.test.js
+describe("Cart", () => {
+  it("starts empty", () => expect(new Cart().total).toBe(0));
+});
+```
+```python
+# tests/test_cart.py
+class TestCart:
+    def test_starts_empty(self):
+        assert Cart().total == 0
+```
+pytest (third-party) collects `test_*.py` files, `test_*` functions and `Test*` classes without an `__init__`, so a `describe` block becomes a class or a file. Fixtures shared across files go in `conftest.py`, which pytest loads automatically ([Modules & Tooling](lesson:modules-and-tooling#ruff-mypy-and-pytest)).
+
+### `toBe()` vs `toEqual()`
+```js
+expect(total).toBe(42);
+expect(user).toEqual({ name: "Ada", tags: [] });
+expect(result).toBe(cached);  // the same object
+```
+```python
+assert total == 42
+assert user == {"name": "Ada", "tags": []}  # == compares deeply
+assert result is cached
+```
+`==` covers both `toBe` on primitives and `toEqual`, and `is` checks identity. When an `assert` fails, pytest shows both sides with a diff.
+
+### `toThrow()`: the exception and its message
+```js
+expect(() => parseAge("-1")).toThrow(RangeError);
+expect(() => parseAge("-1")).toThrow(/must be positive/);
+```
+```python
+with pytest.raises(ValueError, match=r"must be positive"):
+    parse_age("-1")
+```
+```python
+with pytest.raises(ValueError) as excinfo:
+    parse_age("-1")
+assert excinfo.value.args == ("age must be positive",)
+```
+`match` is a regex searched for in `str(exception)`, so pass literal text through `re.escape()`. The `as` form lets you inspect the exception after the block.
+
+### `toBeCloseTo()`: floats
+```js
+expect(0.1 + 0.2).toBeCloseTo(0.3);
+expect(total).toBeCloseTo(9.99, 2);
+```
+```python
+assert 0.1 + 0.2 == pytest.approx(0.3)
+assert total == pytest.approx(9.99, abs=0.005)
+```
+```python
+assert math.isclose(0.1 + 0.2, 0.3)  # stdlib, no pytest needed
+```
+`approx` defaults to a relative tolerance of one in a million, and it also compares lists and dicts of floats: `[0.1 + 0.2] == approx([0.3])`.
+
+### `toContain()` / `toHaveLength()` / `toBeNull()`
+```js
+expect(roles).toContain("admin");
+expect(items).toHaveLength(3);
+expect(user).toBeNull();
+expect(code).toMatch(/^\d{6}$/);
+```
+```python
+assert "admin" in roles
+assert len(items) == 3
+assert user is None
+assert re.fullmatch(r"\d{6}", code)
+```
+Every matcher is a plain expression: `toBeTruthy()` is `assert value`, `toBeInstanceOf(Admin)` is `assert isinstance(user, Admin)`, and `.not` is `not`.
+
+### `toMatchObject()`: partial matches
+```js
+expect(response).toMatchObject({ status: 201, body: { id: 7 } });
+```
+```python
+assert {"status": 201}.items() <= response.items()  # these pairs are present
+```
+```python
+from unittest.mock import ANY
+assert response == {"status": 201, "body": {"id": 7, "created_at": ANY}}
+```
+Dict item views compare like sets, but only one level deep. `ANY` equals everything, so it marks the values you don't care about inside an otherwise exact comparison.
+
+### `jest.fn()` / `mockReturnValue()`
+```js
+const getRate = jest.fn().mockReturnValue(1.2);
+convert(100, getRate);
+expect(getRate).toHaveBeenCalledTimes(1);
+```
+```python
+from unittest.mock import Mock
+get_rate = Mock(return_value=1.2)
+convert(100, get_rate)
+assert get_rate.call_count == 1
+```
+A `Mock` accepts any call and invents attributes on access (`mock.anything()` works), so pass `spec=RealClass` to make typos fail. `MagicMock` also supports dunders such as `len()` and iteration.
+
+### `mockImplementation()` / `mockReturnValueOnce()` → `side_effect`
+```js
+fetchPrice.mockImplementation((sku) => prices[sku]);
+fetchPrice.mockReturnValueOnce(10).mockReturnValueOnce(12);
+fetchPrice.mockImplementation(() => { throw new Error("down"); });
+```
+```python
+fetch_price = Mock(side_effect=lambda sku: prices[sku])
+fetch_price = Mock(side_effect=[10, 12])  # one per call, then StopIteration
+fetch_price = Mock(side_effect=ConnectionError("down"))
+```
+`side_effect` can be a function whose result is returned, an iterable of values (an exception in the list is raised when its turn comes), or an exception to raise on every call.
+
+### `toHaveBeenCalledWith()`
+```js
+expect(send).toHaveBeenCalledWith("ada@example.com", { subject: "Hi" });
+expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.anything());
+send.mock.calls[0][1].subject
+```
+```python
+send.assert_any_call("ada@example.com", subject="Hi")
+send.assert_called_with(ANY, subject=ANY)  # checks the last call only
+send.call_args_list[0].kwargs["subject"]
+```
+`assert_called_once_with()` also checks there was exactly one call. A misspelled `assert_*` method raises `AttributeError` rather than silently passing.
+
+### `mockResolvedValue()` / `mockRejectedValue()` → `AsyncMock`
+```js
+api.getUser = jest.fn().mockResolvedValue({ name: "Ada" });
+api.getUser = jest.fn().mockRejectedValue(new Error("timeout"));
+```
+```python
+api.get_user = AsyncMock(return_value={"name": "Ada"})
+api.get_user = AsyncMock(side_effect=TimeoutError("slow"))
+api.get_user.assert_awaited_once_with(42)
+```
+Calling an `AsyncMock` returns a coroutine, so the code under test must `await` it. `patch()` creates an `AsyncMock` by itself when the target is an `async def`.
+
+### `jest.spyOn()`: watch a real method
+```js
+const spy = jest.spyOn(mailer, "send");
+checkout(cart, mailer);
+expect(spy).toHaveBeenCalled();
+spy.mockRestore();
+```
+```python
+with patch.object(mailer, "send", wraps=mailer.send) as spy:
+    checkout(cart, mailer)
+spy.assert_called()
+```
+`wraps=` passes calls through to the real method while recording them, and the original comes back when the block exits. Without `wraps`, `patch.object` replaces the method with a `MagicMock`.
+
+### `jest.mock("./mailer")`: replace a module's function
+```js
+jest.mock("./mailer");
+sendEmail.mockResolvedValue(true);
+```
+```python
+@patch("shop.orders.send_email")  # where it's looked up, not where it's defined
+def test_order_sends_receipt(send_email):
+    place_order(cart)
+    send_email.assert_called_once()
+```
+If `shop/orders.py` does `from shop.mailer import send_email`, patching `shop.mailer.send_email` changes nothing for `orders`, which holds its own reference. `patch` also works as a context manager.
+
+### `beforeEach()` / `afterEach()` → fixtures
+```js
+let db;
+beforeEach(() => { db = createTestDb(); });
+afterEach(() => db.close());
+test("adds a user", () => db.add("ada"));
+```
+```python
+@pytest.fixture
+def db():
+    with create_test_db() as conn:  # setup
+        yield conn                  # the test runs here, then teardown
+```
+```python
+def test_adds_user(db):  # requested by parameter name
+    db.add("ada")
+```
+Each test asks for fixtures by naming them as parameters, so it gets exactly what it needs. `@pytest.fixture(scope="module")` (or `"session"`) is `beforeAll`.
+
+### `test.each()` → `parametrize`
+```js
+test.each([
+  ["1", 1], ["42", 42], [" 7 ", 7],
+])("parses %s", (raw, expected) => expect(parse(raw)).toBe(expected));
+```
+```python
+@pytest.mark.parametrize("raw, expected", [("1", 1), ("42", 42), (" 7 ", 7)])
+def test_parse(raw, expected):
+    assert parse(raw) == expected
+```
+Each tuple becomes a separate test with its own ID, such as `test_parse[42-42]`, and stacking two `parametrize` decorators runs every combination.
+
+### `test.skip()` / `test.only()` / `test.failing()`
+```js
+test.skip("syncs to S3", () => {});
+test.only("parses dates", () => {});
+test.failing("known rounding bug", () => {});
+```
+```python
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX paths only")
+def test_symlinks(): ...
+@pytest.mark.xfail(reason="known rounding bug")
+def test_rounding(): ...
+```
+There's no `.only`: select tests by name with `pytest -k dates` instead. `@pytest.mark.skip(reason=...)` skips unconditionally, and `pytest.skip()` skips from inside a running test.
+
+### Fake timers and randomness
+```js
+jest.useFakeTimers();
+jest.setSystemTime(new Date("2024-01-15"));
+jest.advanceTimersByTime(1000);
+```
+```python
+def is_expired(token, *, now=time.time):  # inject the clock
+    return now() > token.expires_at
+assert is_expired(token, now=lambda: 2_000_000_000)
+```
+```python
+@freeze_time("2024-01-15")  # pip install freezegun (or time-machine)
+def test_invoice_date(): ...
+```
+Injecting the clock (and a seeded `random.Random(42)`) keeps tests deterministic without patching. freezegun and time-machine freeze `datetime.now()` and `time.time()` globally instead.
+
+### Snapshots: `toMatchSnapshot()`
+```js
+expect(renderInvoice(order)).toMatchSnapshot();
+expect(config).toMatchInlineSnapshot(`{ "debug": false }`);
+```
+```python
+def test_invoice(snapshot):  # pip install syrupy
+    assert render_invoice(order) == snapshot
+```
+```python
+from inline_snapshot import snapshot  # pip install inline-snapshot
+assert config == snapshot({"debug": False})
+```
+pytest has no built-in snapshots. syrupy stores them in `__snapshots__` folders and `pytest --snapshot-update` rewrites them, like `jest -u`.
+
+### Coverage: `jest --coverage`
+```bash
+npx jest --coverage
+npx vitest run --coverage
+```
+```bash
+uv run pytest --cov=shop --cov-report=term-missing  # needs pytest-cov
+```
+```bash
+uv run coverage run -m pytest
+uv run coverage report -m
+```
+coverage.py does the measuring and pytest-cov wires it into pytest. `--cov-fail-under=90` fails the run below a threshold, like `coverageThreshold`, and `--cov-branch` adds branch coverage.
+
+### Async tests
+```js
+test("loads the user", async () => {
+  expect(await loadUser(1)).toEqual({ id: 1 });
+});
+```
+```python
+@pytest.mark.asyncio  # pip install pytest-asyncio
+async def test_loads_user():
+    assert await load_user(1) == {"id": 1}
+```
+```python
+class TestUsers(unittest.IsolatedAsyncioTestCase):  # stdlib
+    async def test_loads_user(self): ...
+```
+pytest can't run `async def` tests by itself. pytest-asyncio (or the anyio plugin) supplies the event loop, and `asyncio_mode = "auto"` in its config makes the marker unnecessary.
+
+### Run a subset: `jest -t` / `--bail` / `--onlyFailures`
+```bash
+npx jest -t "parses dates"
+npx jest --bail
+npx jest --onlyFailures
+npx jest src/cart.test.js
+```
+```bash
+uv run pytest -k "parses and dates"
+uv run pytest -x
+uv run pytest --lf
+uv run pytest tests/test_cart.py::test_total
+```
+`-k` takes an expression over test names, `-x` stops at the first failure and `--lf` reruns the last failures. Add `-s` to see `print()` output and `--pdb` to debug a failure.
+
+### Built-in fixtures: `tmp_path`, `monkeypatch`, `capsys`
+```js
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t-"));
+process.env.API_URL = "http://test";
+const log = jest.spyOn(console, "log");
+```
+```python
+def test_export(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("API_URL", "http://test")  # undone after the test
+    export(tmp_path / "out.csv")
+    assert "exported" in capsys.readouterr().out
+```
+`tmp_path` is a fresh directory per test, `monkeypatch` also replaces attributes (`setattr`), and `capsys` captures stdout and stderr. Outside pytest, `contextlib.redirect_stdout(io.StringIO())` captures prints.
+
+### `node:test` → `unittest.TestCase`
+```js
+import { test } from "node:test";
+import assert from "node:assert/strict";
+test("totals the cart", () => assert.equal(total([1, 2]), 3));
+```
+```python
+class TestTotal(unittest.TestCase):
+    def setUp(self): self.prices = [1, 2]
+    def test_totals_the_cart(self):
+        self.assertEqual(total(self.prices), 3)
+```
+`unittest` ships with Python, like `node:test`: run it with `python -m unittest`, and pytest runs these classes too. Its `assert*` methods (`assertIn`, `assertRaises`, `assertAlmostEqual`) print readable failures.
+
+### `@example` blocks that run: `doctest`
+```js
+/**
+ * @example slugify("Hello World") // "hello-world"
+ */
+```
+```python
+def slugify(title):
+    """
+    >>> slugify("Hello World")
+    'hello-world'"""
+```
+`python -m doctest -v slugify.py` (or `pytest --doctest-modules`) runs every `>>>` line and compares the printed result, so the examples in your docs can't drift from the code.
+
+## Tooling & packaging
+
+### `package.json` `scripts` → task runners
+```json
+"scripts": {
+  "test": "vitest run",
+  "lint": "eslint ."
+}
+```
+```bash
+uv run pytest -q
+uv run ruff check .
+```
+```toml
+[tool.poe.tasks]  # uv add --dev poethepoet, then: uv run poe test
+test = "pytest -q"
+lint = "ruff check ."
+```
+`pyproject.toml` has no standard scripts table. `uv run` covers one-off commands, and teams add a `Makefile`, a `justfile` or Poe the Poet for named tasks.
+
+### `bin` → `[project.scripts]`
+```json
+{ "name": "billing", "bin": { "billing": "./cli.js" } }
+```
+```toml
+[project.scripts]
+billing = "billing.cli:main"  # module:function
+```
+Installing the package creates a `billing` command that calls `main()`, and `uv run billing` works inside the project. `uv tool install billing` installs a published CLI globally, like `npm install -g`.
+
+### `npm ci`: install exactly the lockfile
+```bash
+npm ci
+npm ci --omit=dev
+```
+```bash
+uv sync --locked  # fails if uv.lock is out of date with pyproject.toml
+uv sync --frozen --no-dev  # trusts uv.lock as is, skips dev dependencies
+```
+Plain `uv sync` quietly re-locks first, like `npm install`, so CI should use `--locked`. `--frozen` skips the freshness check entirely.
+
+### `npm outdated` / `npm update` / `npm uninstall`
+```bash
+npm outdated
+npm update express
+npm uninstall lodash
+npm ls
+```
+```bash
+uv tree --outdated
+uv lock --upgrade-package httpx
+uv remove requests
+uv tree
+```
+`uv lock --upgrade` moves every dependency to the newest version your ranges allow, and the next `uv sync` installs it. With plain pip, use `pip list --outdated` and `pip install -U httpx`.
+
+### `devDependencies` → dependency groups
+```json
+"devDependencies": { "vitest": "^3.0.0", "eslint": "^9.0.0" }
+```
+```toml
+[dependency-groups]  # uv add --dev pytest
+dev = ["pytest>=8", "ruff>=0.6"]
+```
+```toml
+[project.optional-dependencies]  # extras: pip install "billing[pdf]"
+pdf = ["weasyprint>=62"]
+```
+Dependency groups (PEP 735) never ship with the published package, just like `devDependencies`. Extras are optional features that users opt into at install time, the nearest thing to `optionalDependencies`.
+
+### Workspaces and monorepos
+```json
+{ "workspaces": ["packages/*"] }
+```
+```toml
+[tool.uv.workspace]
+members = ["packages/*"]
+```
+```toml
+[tool.uv.sources]  # in a member that depends on another member
+billing-core = { workspace = true }
+```
+A uv workspace shares one `uv.lock` and one `.venv` across its members, and `uv run --package billing-api pytest` runs a command in a single member.
+
+### Version ranges: `^` / `~` → PEP 440
+```json
+"express": "^4.19.2",
+"lodash": "~4.17.21",
+"left-pad": "1.3.0"
+```
+```toml
+dependencies = [
+  "flask>=3.0.2,<4",  # like ^3.0.2
+  "httpx~=0.27.0",    # like ~0.27.0: >=0.27.0, ==0.27.*
+]
+```
+`~=X.Y` means `>=X.Y, ==X.*`, so a two-part `~=` acts like `^` for 1.x and later, and `==1.3.0` pins exactly. Pre-releases are written `2.0.0b1` or `2.0.0rc1` rather than `2.0.0-beta.1`.
+
+### `.nvmrc` / `nvm use` → `.python-version`
+```bash
+echo "22" > .nvmrc
+nvm install && nvm use
+```
+```bash
+uv python pin 3.14  # writes .python-version
+uv python install   # installs the pinned version
+```
+uv and pyenv both read `.python-version`, and uv downloads a matching interpreter when needed. `requires-python` in `pyproject.toml` declares the range your package supports, like `engines`.
+
+### ESLint config → `[tool.ruff.lint]`
+```js
+// eslint.config.js
+export default [{ rules: { "no-unused-vars": "error", eqeqeq: "error" } }];
+```
+```toml
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "UP"]  # rule families, by code prefix
+ignore = ["E501"]
+per-file-ignores = { "__init__.py" = ["F401"] }
+```
+`F` (pyflakes) catches unused names and imports, `B` (bugbear) catches traps such as mutable defaults, `I` sorts imports and `UP` modernises syntax. `ruff rule B006` explains any rule.
+
+### Prettier config → `[tool.ruff.format]`
+```json
+{ "printWidth": 100, "singleQuote": true }
+```
+```toml
+[tool.ruff]
+line-length = 100
+[tool.ruff.format]
+quote-style = "single"
+```
+The formatter is Black-compatible and deliberately has few options. `ruff format --diff` previews changes, and `# fmt: off` / `# fmt: on` protect hand-aligned blocks.
+
+### `// eslint-disable-next-line` → `# noqa`
+```js
+// eslint-disable-next-line no-eval
+eval(code);
+/* eslint-disable no-console */
+```
+```python
+eval(code)  # noqa: S307
+```
+```python
+# ruff: noqa: E501
+```
+`# noqa` goes at the end of the offending line, since there's no next-line form, and should always name its codes: a bare `# noqa` silences everything. A `# ruff: noqa: CODE` comment at the top of a file covers the whole file.
+
+### `tsconfig.json` → `[tool.mypy]` / `[tool.pyright]`
+```json
+{ "compilerOptions": { "strict": true }, "include": ["src"] }
+```
+```toml
+[tool.mypy]
+strict = true
+files = ["src"]
+```
+```toml
+[tool.pyright]
+typeCheckingMode = "strict"
+```
+mypy's `strict` bundles checks such as `disallow_untyped_defs`, much like TS's `strict`, and `[[tool.mypy.overrides]]` loosens it per module for legacy code.
+
+### `// @ts-expect-error` → `# type: ignore[code]`
+```ts
+// @ts-expect-error: the legacy API returns any
+const total: number = legacy.total();
+```
+```python
+total: int = legacy.total()  # type: ignore[assignment]
+```
+```python
+total = legacy.total()  # pyright: ignore[reportAssignmentType]
+```
+Always scope an ignore to an error code. mypy's `warn_unused_ignores` (part of `strict`) then reports ignores that are no longer needed, as `@ts-expect-error` does.
+
+### `@types/*` and `.d.ts` → stubs and `py.typed`
+```bash
+npm install --save-dev @types/express
+```
+```bash
+uv add --dev types-requests  # stub packages from typeshed
+```
+```text
+billing/
+  __init__.py
+  py.typed  # an empty marker: "this package ships type hints"
+```
+Many libraries ship inline hints plus an empty `py.typed` marker, so no stubs are needed. For untyped code, `.pyi` stub files play the role of `.d.ts` files.
+
+### `npm version` / `npm publish` → `uv build` / `uv publish`
+```bash
+npm version patch
+npm publish
+```
+```bash
+uv version --bump patch
+uv build    # dist/*.whl and dist/*.tar.gz
+uv publish  # or: twine upload dist/*
+```
+A build produces a wheel (a prebuilt zip) and a source distribution. PyPI favours trusted publishing from CI over long-lived API tokens.
+
+### `.env` files
+```bash
+node --env-file=.env server.js
+```
+```bash
+uv run --env-file .env python server.py
+```
+```python
+from dotenv import load_dotenv  # pip install python-dotenv
+load_dotenv()  # then read os.environ as usual
+```
+Neither Python nor uv loads `.env` on its own. `load_dotenv()` leaves variables that are already set alone unless you pass `override=True`.
+
+### `npx tsx script.ts` → single-file scripts with dependencies
+```bash
+npx tsx scripts/seed.ts
+```
+```python
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["httpx"]
+# ///
+```
+```bash
+uv run scripts/seed.py  # installs httpx into a cached environment first
+```
+Inline script metadata (PEP 723) lets one file declare its own dependencies, and `uv add --script seed.py httpx` writes the block for you.
+
+### husky + lint-staged → pre-commit
+```json
+"lint-staged": { "*.ts": ["eslint --fix", "prettier --write"] }
+```
+```yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks: [{ id: ruff-check, args: [--fix] }, { id: ruff-format }]
+```
+`pre-commit install` adds the git hook and `pre-commit run --all-files` checks the whole repo. Each hook runs in its own cached environment, pinned by `rev`.
+
+## Python power tools JS lacks
+
+### Retry with a give-up branch: `for` / `else`
+```js
+let ok = false;
+for (let i = 0; i < 3 && !ok; i++) ok = tryConnect();
+if (!ok) throw new Error("gave up");
+```
+```python
+for attempt in range(3):
+    if try_connect(): break
+else:
+    raise ConnectionError("gave up after 3 attempts")
+```
+The loop's `else` runs only when the loop finishes without `break`, so the success flag disappears. `while` loops accept an `else` too.
+
+### Check sorted order or equality: chained comparisons
+```js
+xs.every((x, i) => i === 0 || xs[i - 1] <= x)
+a === b && b === c
+```
+```python
+all(a <= b for a, b in pairwise(xs))  # pairwise from itertools, 3.10+
+a == b == c
+```
+```python
+xs == sorted(xs)  # shorter, but sorts a copy
+```
+`a == b == c` chains like `0 <= x < 10`, linking each comparison to the next with an implicit `and`. For a whole list of hashable values, `len(set(values)) <= 1` asks "all equal?".
+
+### `Math.floor(i / w)` and `i % w`: `divmod()`
+```js
+const row = Math.floor(i / width), col = i % width;
+const pages = Math.ceil(total / perPage);
+```
+```python
+row, col = divmod(i, width)
+pages = -(-total // per_page)  # ceiling division without floats
+```
+`divmod` returns the floor quotient and the remainder together, consistent with `//` and `%` for negative numbers. `math.ceil(total / per_page)` also works, but goes through a float that loses precision past `2**53`.
+
+### Lazily computed attribute: `cached_property`
+```js
+get report() {
+  return (this._report ??= buildReport(this.rows));
+}
+```
+```python
+class Dashboard:
+    @cached_property  # from functools
+    def report(self):
+        return build_report(self.rows)
+```
+The first access computes the value and stores it in the instance's `__dict__`, so later reads are ordinary attribute lookups. `del dashboard.report` clears it.
+
+### Sortable records: `@dataclass(order=True)`
+```js
+versions.sort((a, b) => a.major - b.major || a.minor - b.minor);
+```
+```python
+@dataclass(order=True, frozen=True)
+class Version:
+    major: int
+    minor: int
+```
+`order=True` generates `<`, `<=`, `>` and `>=`, comparing the fields as a tuple in declaration order, so `sorted(versions)` and `max(versions)` just work. Leave a field out with `field(compare=False)`.
+
+### Dispatch on type and shape: `match` class patterns
+```js
+if (shape instanceof Circle) return Math.PI * shape.radius ** 2;
+if (shape instanceof Rect && shape.w === shape.h) return shape.w ** 2;
+```
+```python
+match shape:
+    case Circle(radius=r): return math.pi * r ** 2
+    case Rect(w, h) if w == h: return w ** 2
+    case Rect(w, h): return w * h
+```
+A class pattern runs an `isinstance` check and pulls out attributes in one step. Positional sub-patterns rely on `__match_args__`, which dataclasses generate from their fields ([Pattern Matching](lesson:pattern-matching)).
+
+### Replace or delete many characters: `str.translate()`
+```js
+s.replace(/[äöü]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue" })[c])
+s.replace(/[,.!?]/g, "")
+```
+```python
+s.translate(str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue"}))
+s.translate(str.maketrans("", "", ",.!?"))  # the third argument deletes
+```
+`maketrans` builds a lookup table once and `translate` applies it in a single pass, which beats a chain of `replace()` calls. In the dict form, mapping a character to `None` deletes it.
+
+### Named slices for fixed-width records
+```js
+const name = line.slice(0, 20).trim();
+const qty = Number(line.slice(20, 26));
+```
+```python
+NAME, QTY = slice(0, 20), slice(20, 26)
+name, qty = line[NAME].strip(), int(line[QTY])
+```
+A `slice` object is the `start:stop:step` from inside the brackets as a value, so a record layout gets names and lives in one place. Steps work too: `pixels[::4]` is every fourth item.
+
+### Add and subtract counts: `Counter` arithmetic
+```js
+const left = {};
+for (const [sku, n] of Object.entries(stock)) left[sku] = n - (sold[sku] ?? 0);
+```
+```python
+left = Counter(stock) - Counter(sold)  # drops zero and negative counts
+combined = Counter(warehouse_a) + Counter(warehouse_b)
+```
+`&` keeps the smaller of each pair of counts and `|` the larger. Use `subtract()` to keep negative counts, and `total()` (3.10+) to add up all of them.
+
+### Money: `Decimal` with explicit rounding
+```js
+Math.round(price * qty * 100) / 100  // floats, rounded by hand
+```
+```python
+from decimal import Decimal, ROUND_HALF_UP
+total = Decimal("19.99") * 3  # Decimal('59.97'), exactly
+total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+```
+`Decimal` does exact base-10 arithmetic, and `quantize` rounds to a fixed number of places with the rule you choose (banker's rounding by default). Mixing a `Decimal` with a `float` raises `TypeError`.
+
+### Exact fractions: `Fraction`
+```js
+// a library such as fraction.js
+new Fraction(1, 3).add(new Fraction(1, 6)).toFraction()  // "1/2"
+```
+```python
+from fractions import Fraction
+Fraction(1, 3) + Fraction(1, 6)  # Fraction(1, 2)
+Fraction(1, 3) * 3 == 1          # True
+```
+Fractions stay exact, always reduce to lowest terms and mix freely with `int`s. `Fraction("0.75")` parses decimal strings, and `limit_denominator()` finds a simple fraction close to a float.
+
+### Thresholds and sorted inserts: `bisect`
+```js
+const grade = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "F";
+scores.push(s); scores.sort((a, b) => a - b);
+```
+```python
+from bisect import bisect, insort
+grade = "FCBA"[bisect([70, 80, 90], score)]
+insort(scores, s)  # keeps the list sorted
+```
+`bisect` returns how many breakpoints are `<= score`, which indexes straight into the labels. Both functions use binary search and accept `key=` (3.10+).
+
+### Priority queue: `heapq`
+```js
+queue.push(job);
+queue.sort((a, b) => a.priority - b.priority);
+const next = queue.shift();
+```
+```python
+heapq.heappush(queue, (job.priority, job.id, job))  # queue is a plain list
+next_job = heapq.heappop(queue)[-1]  # lowest priority value first
+```
+`heapq` keeps a list ordered as a min-heap, with O(log n) pushes and pops. Tuples compare left to right, so the unique `job.id` breaks ties before Python would try to compare two jobs.
+
+### Wrap and indent text: `textwrap`
+```js
+// a package such as word-wrap
+wrap(text, { width: 72, indent: "  " })
+```
+```python
+textwrap.fill(text, width=72)
+textwrap.indent(body, "> ")  # prefixes every line
+```
+`textwrap.wrap()` returns the list of lines instead, `dedent()` strips common indentation and `shorten()` truncates at a word boundary.
+
+### Run code only on success: `try` / `except` / `else`
+```js
+let ok = true;
+try { data = parse(text); } catch { ok = false; }
+if (ok) save(data);  // kept out of the try on purpose
+```
+```python
+try: data = parse(text)
+except ValueError: log.warning("bad input")
+else: save(data)  # runs only if parse() didn't raise
+```
+Code in `else` isn't covered by the `except`, so an error inside `save()` propagates instead of being reported as bad input ([Errors & Exceptions](lesson:exceptions#try-except-else-finally)).
+
+### Overload by argument type: `singledispatch`
+```js
+function toJSON(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Set) return [...value];
+}
+```
+```python
+@singledispatch  # from functools
+def to_json(value): raise TypeError(type(value).__name__)
+@to_json.register
+def _(value: datetime): return value.isoformat()
+```
+Each `register` takes its type from the first parameter's annotation, and subclasses fall back to their base class's implementation, so `bool` values reach an `int` one. `singledispatchmethod` does the same for methods.
+
+### Layered config: `ChainMap`
+```js
+const settings = { ...defaults, ...fileConfig, ...envConfig, ...cliArgs };
+```
+```python
+from collections import ChainMap
+settings = ChainMap(cli_args, env_config, file_config, defaults)
+settings["port"]  # the first mapping with the key wins
+```
+Unlike a merged copy, a `ChainMap` looks keys up live in each mapping in turn, so later changes to `defaults` show through. Writes and deletes go to the first mapping only.
+
+### Keep the last N items: `deque(maxlen=)`
+```js
+recent.push(event);
+if (recent.length > 100) recent.shift();
+```
+```python
+from collections import deque
+recent = deque(maxlen=100)
+recent.append(event)  # the oldest item falls off the other end
+```
+Appending and popping at either end of a `deque` is O(1), while `list.pop(0)` shifts every element along.
+
+### Bit flags: `enum.Flag`
+```js
+const READ = 1, WRITE = 2, EXEC = 4;
+const perms = READ | WRITE;
+if (perms & WRITE) {}
+```
+```python
+class Perm(Flag):  # from enum import Flag, auto
+    READ = auto()
+    WRITE = auto()
+    EXEC = auto()
+```
+```python
+perms = Perm.READ | Perm.WRITE
+Perm.WRITE in perms  # True; repr(perms) is <Perm.READ|WRITE: 3>
+```
+Flags combine with `|`, `&` and `~`, test membership with `in`, iterate over their members (3.11+) and print readably instead of as a bare number.
+
+### Fill a template from a dict: `format_map()` / `Template`
+```js
+template.replace(/\{(\w+)\}/g, (_, key) => values[key])
+```
+```python
+"Hi {name}, you owe {amount:.2f}".format_map(values)
+```
+```python
+from string import Template
+Template("Hi $name").safe_substitute(values)  # leaves unknown $names alone
+```
+`format_map` supports the whole format-spec language but raises `KeyError` for a missing key. `string.Template` has a simpler `$name` syntax that's safer for user-supplied templates.
+
+### "Did you mean…?": `difflib.get_close_matches()`
+```js
+// a package such as fastest-levenshtein
+closest(input, commands)
+```
+```python
+from difflib import get_close_matches
+get_close_matches("pyhton", ["python", "pytest", "pylint"])  # ['python']
+```
+It returns up to `n=3` matches that score above `cutoff=0.6`, best first, which is all a CLI needs for typo suggestions.
+
+### Operator overloading: `__add__`
+```js
+const total = a.add(b).scale(2);  // no operator overloading
+```
+```python
+class Vector:
+    def __add__(self, other): return Vector(self.x + other.x, self.y + other.y)
+    def __mul__(self, k): return Vector(self.x * k, self.y * k)
+total = (a + b) * 2
+```
+Every operator dispatches to a dunder (`__sub__`, `__eq__`, `__matmul__` for `@`, and so on). Return `NotImplemented` for unsupported operand types so Python can try the other operand's reflected method, such as `__radd__` ([Dunder Methods](lesson:dunder-methods#operator-overloading)).
+
+### Dependency order: `graphlib.TopologicalSorter`
+```js
+// a package such as toposort, or Kahn's algorithm by hand
+toposort(edges)
+```
+```python
+from graphlib import TopologicalSorter
+deps = {"app": {"db", "cache"}, "db": {"config"}, "cache": {"config"}}
+list(TopologicalSorter(deps).static_order())  # 'config' first, 'app' last
+```
+Map each node to the nodes it depends on. A cycle raises `graphlib.CycleError`, and `get_ready()` with `done()` hands out nodes that can be processed in parallel.
+
+## Data processing (lodash → stdlib)
+
+### `_.orderBy()`: several keys, mixed directions
+```js
+_.orderBy(users, ["lastName", "age"], ["desc", "asc"])
+```
+```python
+users.sort(key=itemgetter("age"))                      # minor key first
+users.sort(key=itemgetter("last_name"), reverse=True)  # then the major key
+```
+```python
+sorted(users, key=lambda u: (-u["age"], u["last_name"]))  # negate numbers
+```
+Python's sort is stable, `reverse=True` included, so sorting by the minor key and then by the major key gives a multi-key order even when a string key must be descending.
+
+### `_.uniqWith(rows, _.isEqual)`: dedupe dicts by value
+```js
+_.uniqWith(rows, _.isEqual)
+```
+```python
+unique = []
+for row in rows:
+    if row not in unique:  # == compares dicts deeply
+        unique.append(row)
+```
+```python
+list({json.dumps(r, sort_keys=True): r for r in rows}.values())
+```
+Dicts aren't hashable, so `set()` and `dict.fromkeys()` can't dedupe them directly. The loop is O(n²) but works for any values, while keying by canonical JSON scales to big inputs of JSON-safe data.
+
+### Join two lists on an id
+```js
+const usersById = _.keyBy(users, "id");
+orders.map((o) => ({ ...o, user: usersById[o.userId] }))
+```
+```python
+users_by_id = {u["id"]: u for u in users}
+[{**o, "user": users_by_id.get(o["user_id"])} for o in orders]
+```
+Indexing one side in a dict makes the join O(n + m) instead of a nested scan, and `.get()` gives `None` for an order without a user, like a left join.
+
+### `_.zipObject()`: a header row plus rows → records
+```js
+const [header, ...rows] = lines.map((line) => line.split(","));
+rows.map((row) => _.zipObject(header, row))
+```
+```python
+header, *rows = (line.split(",") for line in lines)
+records = [dict(zip(header, row, strict=True)) for row in rows]
+```
+`strict=True` (3.10+) raises on a ragged row instead of silently dropping fields. For real CSV with quoting, `csv.DictReader` does all of this for you.
+
+### `_.intersectionBy()` / `_.differenceBy()`
+```js
+_.intersectionBy(current, previous, "id")
+_.differenceBy(current, previous, "id")
+```
+```python
+previous_ids = {p["id"] for p in previous}
+kept = [c for c in current if c["id"] in previous_ids]
+added = [c for c in current if c["id"] not in previous_ids]
+```
+Building the set of keys once makes each membership test O(1), and the comprehensions keep the order of `current`.
+
+### `_.difference()` / `_.without()`: keep order and duplicates
+```js
+_.difference(tags, removed)
+_.without(tags, "draft", "wip")
+```
+```python
+removed_set = set(removed)
+[t for t in tags if t not in removed_set]
+[t for t in tags if t not in {"draft", "wip"}]
+```
+`set(tags) - set(removed)` is shorter, but it loses the order and any duplicates.
+
+### `_.debounce()` / `_.throttle()`
+```js
+const saveSoon = _.debounce(saveDraft, 300);
+const track = _.throttle(sendPosition, 1000);
+```
+```python
+def debounce(timer, delay, fn):  # timer = debounce(timer, 0.3, save_draft)
+    if timer is not None:
+        timer.cancel()
+    return asyncio.get_running_loop().call_later(delay, fn)
+```
+```python
+if time.monotonic() - last_sent >= 1.0:  # throttle: at most once a second
+    last_sent = time.monotonic()
+    send_position()
+```
+There's no stdlib helper because there's no ambient event loop. Debouncing re-arms a `call_later` timer on every call, and throttling compares `time.monotonic()` with the last run.
+
+### `_.get(obj, path)` with a dynamic path
+```js
+_.get(data, ["users", 0, "email"])
+```
+```python
+from functools import reduce
+from operator import getitem
+reduce(getitem, ["users", 0, "email"], data)  # data["users"][0]["email"]
+```
+Keep the path as a list so list indexes stay `int`s, and catch `(KeyError, IndexError, TypeError)` to fall back to a default as lodash does.
+
+### `_.set(obj, path, value)`: create missing levels
+```js
+_.set(config, "db.replica.host", "10.0.0.2")
+```
+```python
+*parents, last = "db.replica.host".split(".")
+node = reduce(lambda d, key: d.setdefault(key, {}), parents, config)
+node[last] = "10.0.0.2"
+```
+`setdefault` returns the existing nested dict or inserts an empty one, so the walk creates any missing levels. Unlike lodash, it never creates lists for numeric segments.
+
+### `_.merge()`: deep merge
+```js
+const config = _.merge({}, defaults, overrides);
+```
+```python
+def deep_merge(base, extra):
+    nested = {k: deep_merge(base[k], v) for k, v in extra.items()
+              if isinstance(v, dict) and isinstance(base.get(k), dict)}
+    return base | extra | nested
+```
+`|` merges the top level and the comprehension recurses wherever both sides hold dicts. Lists are replaced rather than merged index by index as in lodash, and neither input is mutated.
+
+### Immutable nested update
+```js
+const next = { ...state, user: { ...state.user, name: "Ada" } };
+```
+```python
+next_state = {**state, "user": {**state["user"], "name": "Ada"}}
+```
+```python
+next_state = state | {"user": state["user"] | {"name": "Ada"}}  # 3.9+
+```
+Both forms copy only the dicts along the changed path and share everything else, just like spreads. For dataclasses, nest `dataclasses.replace()` calls.
+
+### `_.range()` with a step
+```js
+_.range(0, 20, 5)    // [0, 5, 10, 15]
+_.range(0, 1, 0.25)  // [0, 0.25, 0.5, 0.75]
+_.range(-4)          // [0, -1, -2, -3]
+```
+```python
+range(0, 20, 5)  # lazy; list(range(0, 20, 5)) is [0, 5, 10, 15]
+[i * 0.25 for i in range(4)]  # range() only takes ints
+list(range(0, -4, -1))  # range(-4) is empty
+```
+A `range` is a lazy, immutable sequence with `len()`, indexing and fast `in` checks, so there's rarely a reason to build the list.
+
+### `_.meanBy()` / weighted average
+```js
+_.meanBy(orders, "total")
+_.sumBy(items, (i) => i.price * i.qty) / _.sumBy(items, "qty")
+```
+```python
+statistics.fmean(o["total"] for o in orders)
+```
+```python
+prices, qtys = [i["price"] for i in items], [i["qty"] for i in items]
+statistics.fmean(prices, weights=qtys)  # 3.11+
+```
+`fmean` accepts any iterable of numbers and raises `StatisticsError` when it's empty, where lodash returns `NaN`.
+
+### Sliding windows
+```js
+_.range(xs.length - n + 1).map((i) => xs.slice(i, i + n))
+```
+```python
+[xs[i:i + n] for i in range(len(xs) - n + 1)]
+```
+```python
+rolling = [fmean(daily[i:i + 7]) for i in range(len(daily) - 6)]  # 7-day mean
+```
+Each slice is a new list, which is fine for modest data. For a stream, push items into a `deque(maxlen=n)` and read the window as you go.
+
+### Group and aggregate: `_.groupBy()` + `_.sumBy()`
+```js
+_.mapValues(_.groupBy(orders, "region"), (rows) => _.sumBy(rows, "amount"))
+```
+```python
+totals = defaultdict(float)
+for o in orders:
+    totals[o["region"]] += o["amount"]
+```
+A `defaultdict` aggregates in one pass with no sorting. For several statistics per group, collect each group's values in a `defaultdict(list)` first and summarise them afterwards.
+
+### Columns ↔ rows
+```js
+const rows = cols.name.map((_, i) =>
+  Object.fromEntries(Object.entries(cols).map(([k, v]) => [k, v[i]])));
+```
+```python
+rows = [dict(zip(cols, values)) for values in zip(*cols.values())]
+cols = {key: [row[key] for row in rows] for key in rows[0]}
+```
+`zip(*cols.values())` transposes the columns into one tuple per row, and iterating a dict yields its keys in the same order as `values()`.
+
+### Top N by a key: `heapq.nlargest()`
+```js
+_.take(_.orderBy(products, "sales", "desc"), 3)
+```
+```python
+heapq.nlargest(3, products, key=itemgetter("sales"))
+```
+```python
+sorted(products, key=itemgetter("sales"), reverse=True)[:3]
+```
+`nlargest` and `nsmallest` avoid sorting everything, which pays off when N is small compared with the data, and ties keep their original order.
+
+### Median and percentiles: `statistics`
+```js
+median(latencies)          // simple-statistics
+quantile(latencies, 0.9)
+```
+```python
+statistics.median(latencies)
+statistics.quantiles(latencies, n=100)[89]  # the 90th percentile
+```
+`quantiles` returns the `n - 1` cut points, using the `"exclusive"` method unless you pass `method="inclusive"`. `mode`, `stdev` and `correlation` live in the same module.

@@ -3,7 +3,7 @@
 // worker (SharedArrayBuffer interrupts would need cross-origin isolation,
 // which static hosts like GitHub Pages can't provide).
 
-import type { RunResult, WorkerMessage } from './types.ts';
+import type { RunResult, TestEvent, WorkerMessage } from './types.ts';
 
 export type RuntimeState =
   | { state: 'idle' }
@@ -23,6 +23,8 @@ export interface RunOptions {
   onInfo?: (text: string) => void;
   /** Called when the code actually starts executing (after Python loads). */
   onStart?: () => void;
+  /** Challenge tests, as each one starts and finishes. */
+  onTest?: (event: TestEvent) => void;
 }
 
 export interface RunOutcome extends RunResult {
@@ -154,6 +156,9 @@ class PythonRuntime {
       }
       case 'done':
         if (this.active?.id === message.id) this.finish(message.result);
+        return;
+      case 'test':
+        if (this.active?.id === message.id) this.active.options.onTest?.(message.event);
         return;
       case 'fatal':
         this.restart();

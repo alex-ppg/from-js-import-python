@@ -36,7 +36,8 @@ const highlightStyle = HighlightStyle.define([
 const theme = EditorView.theme({
   '&': { color: 'var(--code-text)', backgroundColor: 'transparent', fontSize: 'var(--code-size)' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
+  // No ligatures: learners should see `->` and `!=`, not glyphs they can't type.
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6', fontVariantLigatures: 'none' },
   '.cm-content': { padding: '12px 0', caretColor: 'var(--caret)' },
   '.cm-line': { padding: '0 16px 0 6px' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--text-faint)', border: 'none', paddingLeft: '6px' },

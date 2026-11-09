@@ -451,12 +451,12 @@ def label(value: str | float | None) -> str:
 
 config = cast(dict[str, int], json.loads(raw))
 
-def is_str_list(xs: list[object]) -> TypeIs[list[str]]:
+def is_str_list(xs: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in xs)
 ```
 :::
 
-Checkers narrow on the same kinds of tests TypeScript does, spelled the Python way: `isinstance` for `typeof` and `instanceof`, `is None` for `=== null`, plus truthiness, `in`, `==` against literals, and `match` statements ([Pattern Matching](lesson:pattern-matching)). `cast(T, value)` is `as`: a promise to the checker that does nothing at runtime, not a conversion. `TypeIs[...]` (3.13+) is the `xs is T` return type for your own predicates. `TypeGuard` (3.10) is an older, weaker form that only narrows the `True` branch.
+Checkers narrow on the same kinds of tests TypeScript does, spelled the Python way: `isinstance` for `typeof` and `instanceof`, `is None` for `=== null`, plus truthiness, `in`, `==` against literals, and `match` statements ([Pattern Matching](lesson:pattern-matching)). `cast(T, value)` is `as`: a promise to the checker that does nothing at runtime, not a conversion. `TypeIs[...]` (3.13+) is the `xs is T` return type for your own predicates. It narrows both branches, but only to a *subtype* of the parameter's type. `TypeGuard` (3.10) is the looser, older form: it only narrows the `True` branch, but it may narrow to types that aren't subtypes. The example needs it, because lists are invariant, so `list[str]` isn't a subtype of `list[object]`. For a predicate over `object` (`def is_str(x: object) -> TypeIs[str]`), prefer `TypeIs`.
 
 For exhaustiveness, end the chain with `assert_never(x)`, the counterpart of TS's `const _exhaustive: never = x`. A checker proves the branch unreachable, and if it's reached anyway, it raises at runtime:
 

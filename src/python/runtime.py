@@ -300,22 +300,35 @@ def _build_test_api(source: str, tree: ast.Module | None, stdout: str):
 
     nodes = list(ast.walk(tree)) if tree is not None else []
 
-    def _has(node_type) -> bool:
-        return any(isinstance(node, node_type) for node in nodes)
+    def _scope(within: str | None) -> list:
+        """All nodes, or just those inside the function/class named `within`.
 
-    def requires_syntax(node_type, msg: str) -> None:
-        """Fail unless the learner's code contains an AST node of `node_type`."""
-        if not _has(node_type):
-            raise CheckFailed(msg)
-
-    def forbids_syntax(node_type, msg: str) -> None:
-        """Fail if the learner's code contains an AST node of `node_type`."""
-        if _has(node_type):
-            raise CheckFailed(msg)
-
-    def _called_names() -> set[str]:
-        names = set()
+        Scoping matters when the starter already contains code (e.g. earlier
+        steps of a project) that would satisfy a module-wide check.
+        """
+        if within is None:
+            return nodes
         for node in nodes:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == within:
+                return list(ast.walk(node))
+        raise CheckFailed(f"couldn't find a function or class named {within!r}")
+
+    def _has(node_type, within: str | None) -> bool:
+        return any(isinstance(node, node_type) for node in _scope(within))
+
+    def requires_syntax(node_type, msg: str, within: str | None = None) -> None:
+        """Fail unless the code (or the def/class named `within`) contains a `node_type` node."""
+        if not _has(node_type, within):
+            raise CheckFailed(msg)
+
+    def forbids_syntax(node_type, msg: str, within: str | None = None) -> None:
+        """Fail if the code (or the def/class named `within`) contains a `node_type` node."""
+        if _has(node_type, within):
+            raise CheckFailed(msg)
+
+    def _called_names(within: str | None) -> set[str]:
+        names = set()
+        for node in _scope(within):
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
                     names.add(node.func.id)
@@ -323,14 +336,14 @@ def _build_test_api(source: str, tree: ast.Module | None, stdout: str):
                     names.add(node.func.attr)
         return names
 
-    def requires_call(name: str, msg: str | None = None) -> None:
+    def requires_call(name: str, msg: str | None = None, within: str | None = None) -> None:
         """Fail unless the learner calls a function or method called `name`."""
-        if name not in _called_names():
+        if name not in _called_names(within):
             raise CheckFailed(msg or f"your code should call {name}()")
 
-    def forbids_call(name: str, msg: str | None = None) -> None:
+    def forbids_call(name: str, msg: str | None = None, within: str | None = None) -> None:
         """Fail if the learner calls a function or method called `name`."""
-        if name in _called_names():
+        if name in _called_names(within):
             raise CheckFailed(msg or f"try solving this without calling {name}()")
 
     def _imported() -> set[str]:
@@ -391,6 +404,39 @@ def _failure_message(exc: BaseException) -> tuple[str, str | None]:
     return f"{type(exc).__name__}: {exc}", text
 
 
+_test_reporter = None
+
+# In the validator a KeyboardInterrupt means "the watchdog timed this run
+# out", so it aborts everything. The browser has no interrupt buffer, so there
+# a KeyboardInterrupt can only come from the learner's own code (simulating
+# Ctrl+C in a CLI exercise, say) and is reported like any other exception.
+_interrupt_aborts = True
+
+
+def set_interrupt_aborts(aborts: bool) -> None:
+    global _interrupt_aborts
+    _interrupt_aborts = bool(aborts)
+
+
+def set_test_reporter(reporter) -> None:
+    """Install a callable that receives a JSON event per test (start/done).
+
+    The browser worker streams these to the page, so a run that times out
+    part-way still shows which tests finished and which one hung.
+    """
+    global _test_reporter
+    _test_reporter = reporter if callable(reporter) else None  # JS null arrives as jsnull
+
+
+def _report(event: str, **payload) -> None:
+    if _test_reporter is None:
+        return
+    try:
+        _test_reporter(json.dumps({"event": event, **payload}))
+    except Exception:  # noqa: BLE001 - reporting must never break a run
+        pass
+
+
 async def _run_tests(tests_source: str, user_ns: dict, source: str, tree, stdout: str):
     _register_source(TESTS_FILE, tests_source)
     api, registered = _build_test_api(source, tree, stdout)
@@ -402,6 +448,7 @@ async def _run_tests(tests_source: str, user_ns: dict, source: str, tree, stdout
 
     results = []
     for name, fn in registered:
+        _report("start", name=name)
         buffer = io.StringIO()
         started = time.perf_counter()
         entry = {"name": name, "passed": False, "message": None, "traceback": None}
@@ -411,13 +458,16 @@ async def _run_tests(tests_source: str, user_ns: dict, source: str, tree, stdout
                 if inspect.isawaitable(outcome):
                     await outcome
             entry["passed"] = True
-        except KeyboardInterrupt:
-            raise
+        except KeyboardInterrupt as exc:
+            if _interrupt_aborts:
+                raise
+            entry["message"], entry["traceback"] = _failure_message(exc)
         except BaseException as exc:  # noqa: BLE001 - every failure is reported
             entry["message"], entry["traceback"] = _failure_message(exc)
         entry["output"] = buffer.getvalue()
         entry["durationMs"] = round((time.perf_counter() - started) * 1000, 2)
         results.append(entry)
+        _report("done", result=entry)
     return results
 
 
@@ -461,14 +511,18 @@ async def run(source: str, tests: str | None = None, show_last: bool = True) -> 
         result["exitCode"] = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
         if exc.code not in (None, 0):
             print(exc.code if not isinstance(exc.code, int) else f"exit code {exc.code}", file=sys.stderr)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as exc:
         result["ok"] = False
-        result["error"] = {
-            "type": "KeyboardInterrupt",
-            "message": "execution interrupted",
-            "traceback": "KeyboardInterrupt: execution interrupted\n",
-            "line": None,
-        }
+        result["error"] = (
+            {
+                "type": "KeyboardInterrupt",
+                "message": "execution interrupted",
+                "traceback": "KeyboardInterrupt: execution interrupted\n",
+                "line": None,
+            }
+            if _interrupt_aborts
+            else _format_error(exc)
+        )
     except BaseException as exc:  # noqa: BLE001 - report everything to the learner
         result["ok"] = False
         result["error"] = _format_error(_unwrap(exc))
