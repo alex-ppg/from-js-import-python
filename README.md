@@ -1,6 +1,8 @@
 # from js import python
 
-**Python for people who already think in JavaScript.**
+[![CI](https://github.com/alex-ppg/from-js-import-python/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-ppg/from-js-import-python/actions/workflows/ci.yml)
+
+**Python for people who already think in JavaScript.** **[Open the site →](https://alex-ppg.github.io/from-js-import-python/)**
 
 Interactive courses that map the JavaScript in your head onto idiomatic Python: side-by-side translations, the traps your JS instincts walk into, and the syntax shortcuts that make Python pleasant. They then go further, into everyday tooling, CPython internals, algorithms and guided projects. Every Python snippet is live: it runs CPython 3.14 compiled to WebAssembly ([Pyodide](https://pyodide.org)) right in the browser, with nothing to install.
 
@@ -83,8 +85,6 @@ See [AUTHORING.md](AUTHORING.md) for the course layout, the content format, the 
 
 The build is fully static, with relative asset URLs and hash routing, so `dist/` works on any static host and in any sub-folder.
 
-The included workflow (`.github/workflows/ci.yml`) type-checks, tests, validates and builds every push and pull request. It deploys `main` to **GitHub Pages** once the repository is public (Pages on private repositories needs a paid plan). To enable it:
+The included workflow (`.github/workflows/ci.yml`) type-checks, tests, validates and builds every push and pull request. Every push to `main` that passes is deployed to **GitHub Pages** at <https://alex-ppg.github.io/from-js-import-python/>. The deploy job only runs while the repository is public, since Pages on private repositories needs a paid plan.
 
-1. Make the repository public.
-2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. Push to `main`, or re-run the workflow.
+To deploy a fork: make it public, set **Settings → Pages → Source** to **GitHub Actions**, and push to `main` (or run the workflow manually).
